@@ -28,7 +28,7 @@ Since LBM needs to update your site files for you, it needs permission.
 
 Now it's time to configure your site before uploading it.
 
-1. Download the LBM files (index.html and style.css) to a folder on your computer.
+1. Download the LBM files (`index.html` and `style.css`) to a folder on your computer.
 2. **Double-click** `index.html` to open it in your web browser.
 3. You will see the **"SYSTEM BOOT // INITIAL SETUP"** screen.
 
