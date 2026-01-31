@@ -1,6 +1,6 @@
 <!--
 LBM (Leaflet Blog Manager)
-Version: 0.1
+Version: 0.3
 License: MIT
 applchu wuz here
 -->
@@ -10,177 +10,120 @@ applchu wuz here
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Loading...</title>
-    <!-- MODULE: LIBRARIES -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <!-- Dynamic Metadata Placeholders -->
+    <title id="dynamic-title">LBM System</title>
+    <meta id="dynamic-desc" name="description" content="A personal microblogging archive.">
+    
+    <!-- CSP Configuration -->
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; img-src * data: blob:; media-src * data: blob:; connect-src * 'unsafe-inline';">
+    
+    <!-- Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="style.css">
+    
     <style>
-        .delete-btn {
-            background: none;
-            border: none;
-            color: var(--dislike-color);
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            opacity: 0.7;
-            margin-left: auto; /* Pushes to right */
-        }
+        /* Essential UI Enhancements */
+        .delete-btn { background: none; border: none; color: var(--dislike-color); cursor: pointer; font-size: 14px; font-weight: bold; opacity: 0.7; margin-left: auto; }
         .delete-btn:hover { opacity: 1; text-decoration: underline; }
+        
+        #bridge-frame { width: 1px; height: 1px; opacity: 0; position: absolute; pointer-events: none; }
+        
+        /* Toast & Sync UI */
+        .sync-status { padding: 10px; margin-bottom: 15px; border: 1px dashed #666; background: #222; font-size: 12px; display: flex; align-items: center; gap: 10px; }
+        .sync-indicator { width: 10px; height: 10px; border-radius: 50%; background: #555; }
+        .sync-indicator.synced { background: #76c7c0; box-shadow: 0 0 5px #76c7c0; }
+        .sync-indicator.unsynced { background: #ff7675; }
+        .sync-indicator.loading { background: #ffeaa7; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        #toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10000; pointer-events: none; }
+        .toast { background: #222; border: 1px solid var(--border-color); border-left: 3px solid var(--accent-color); padding: 12px 16px; border-radius: 4px; display: flex; align-items: center; gap: 10px; color: var(--text-color); font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); pointer-events: auto; min-width: 200px; }
+        .toast.success { border-left-color: #76c7c0; }
+        .toast.error { border-left-color: #ff7675; }
+        .toast.loading { border-left-color: #ffeaa7; }
+        .toast-spinner { width: 12px; height: 12px; border: 2px solid #555; border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite; }
+        
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateY(10px); } }
+
+        /* Upload Modal */
+        #upload-modal { display: none; position: fixed; z-index: 10001; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        .upload-box { background: var(--background-color); border: 1px solid var(--accent-color); padding: 30px; width: 320px; text-align: center; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+        .progress-container { width: 100%; background: #444; height: 8px; border-radius: 4px; margin-top: 20px; overflow: hidden; position: relative; }
+        .progress-fill { height: 100%; background: var(--accent-color); width: 0%; transition: width 0.3s ease-in-out; box-shadow: 0 0 10px var(--accent-color); }
+        .progress-indeterminate { position: absolute; top: 0; left: 0; bottom: 0; right: 0; background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 40px 40px; animation: progress-stripe 1s linear infinite; width: 100%; }
+        @keyframes progress-stripe { 0% { background-position: 40px 0; } 100% { background-position: 0 0; } }
+        .error-details { margin-top: 10px; font-size: 10px; color: #ff7675; background: #222; padding: 5px; border: 1px solid #444; max-height: 100px; overflow-y: auto; display: none; text-align: left; word-break: break-all; }
+
+        /* Media Overlay Navigation */
+        #media-content-wrapper { display: flex; align-items: center; justify-content: center; gap: 20px; width: 100%; height: 100%; }
+        .media-nav { background: rgba(0,0,0,0.5); color: #fff; border: 1px solid #777; font-size: 20px; padding: 10px 15px; cursor: pointer; border-radius: 50%; transition: 0.2s; user-select: none; pointer-events: auto; }
+        .media-nav:hover { background: var(--accent-color); border-color: var(--accent-color); color: #000; }
+        .media-nav:active { transform: scale(0.95); }
     </style>
 </head>
 
 <body>
 
-    <!-- MODULE: SETUP WIZARD -->
-    <div id="setup-overlay" style="display:none;">
-        <div class="setup-box">
-            <h1 style="color:var(--accent-color); margin-bottom:20px; text-align:center;">SYSTEM BOOT // INITIAL SETUP</h1>
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
 
-            <h3 style="border-bottom:1px dotted #555; margin-bottom:10px;">1. Connectivity & Security</h3>
-            <label style="font-size:11px; color:#aaa;">Firebase Config (From Console):</label>
-            <textarea id="setup-config-text" class="setup-input" rows="4" placeholder='const firebaseConfig = { ... };'></textarea>
-
-            <label style="font-size:11px; color:#aaa; margin-top:10px;">Create Admin Password:</label>
-            <input type="password" id="setup-password" class="setup-input" placeholder="Password">
-
-            <h3 style="border-bottom:1px dotted #555; margin: 20px 0 10px 0;">2. Identity & Branding</h3>
-            <div class="config-grid">
-                <div class="config-item">
-                    <label>Site Name</label>
-                    <input type="text" id="setup-site-name" class="setup-input" value="LBM // System" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Tagline</label>
-                    <input type="text" id="setup-tagline" class="setup-input" value="Personal Archive" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Leaflets Tab Name</label>
-                    <input type="text" id="setup-leaflets-name" class="setup-input" value="Leaflets" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Copyright</label>
-                    <input type="text" id="setup-copyright" class="setup-input" value="2025 LBM" oninput="updateSetupPreview()">
-                </div>
+    <!-- Upload Progress Modal -->
+    <div id="upload-modal">
+        <div class="upload-box">
+            <h3 style="color:var(--accent-color); margin-bottom:10px;">SYSTEM SYNC</h3>
+            <p id="upload-status-text" style="color:#aaa; font-size:12px;">Initiating upload sequence...</p>
+            <div class="progress-container">
+                <div id="upload-progress-bar" class="progress-fill"></div>
+                <div class="progress-indeterminate"></div>
             </div>
-
-            <div class="config-item" style="margin-bottom:10px;">
-                <label>Profile Picture URL</label>
-                <input type="text" id="setup-pfp-image" class="setup-input" placeholder="https://..." oninput="updateSetupPreview()">
-            </div>
-            <div class="config-item" style="margin-bottom:10px;">
-                <label>Header Banner URL</label>
-                <input type="text" id="setup-banner-image" class="setup-input" placeholder="https://..." oninput="updateSetupPreview()">
-            </div>
-
-            <h3 style="border-bottom:1px dotted #555; margin: 20px 0 10px 0;">3. Theme & Colors</h3>
-            <div class="config-grid">
-                <div class="config-item">
-                    <label>Main Background</label>
-                    <input type="color" id="col-bg" class="color-picker" value="#2B2B2B" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Text Color</label>
-                    <input type="color" id="col-text" class="color-picker" value="#F0FFF0" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Sidebar/Footer</label>
-                    <input type="color" id="col-sidebar" class="color-picker" value="#3B3B3B" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Accent Color</label>
-                    <input type="color" id="col-accent" class="color-picker" value="#76c7c0" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Post Background</label>
-                    <input type="color" id="col-leaflet" class="color-picker" value="#353535" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Borders</label>
-                    <input type="color" id="col-border" class="color-picker" value="#555555" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Active Nav Text</label>
-                    <input type="color" id="col-nav-active" class="color-picker" value="#FFFFFF" oninput="updateSetupPreview()">
-                </div>
-            </div>
-
-            <h4 style="margin: 10px 0 5px 0; color: #aaa; border-bottom: 1px dotted #555;">Reaction Widget</h4>
-            <div class="config-grid">
-                <div class="config-item">
-                    <label>Enable Reactions?</label>
-                    <select id="setup-reactions-enabled" class="setup-input" onchange="updateSetupPreview()">
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                    </select>
-                </div>
-                <div class="config-item">
-                    <label>Icon Style</label>
-                    <select id="setup-reaction-icon" class="setup-input" onchange="updateSetupPreview()">
-                        <option value="face">Faces (^_^)</option>
-                        <option value="thumb">Thumbs 👍</option>
-                        <option value="arrow">Arrows ⬆</option>
-                    </select>
-                </div>
-                <div class="config-item">
-                    <label>Like Label</label>
-                    <input type="text" id="setup-like-label" class="setup-input" value="(＾∇＾)" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Dislike Label</label>
-                    <input type="text" id="setup-dislike-label" class="setup-input" value="(；へ：)" oninput="updateSetupPreview()">
-                </div>
-            </div>
-            <div class="config-grid">
-                <div class="config-item">
-                    <label>Like Meter Color</label>
-                    <input type="color" id="col-like" class="color-picker" value="#76c7c0" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Dislike Meter Color</label>
-                    <input type="color" id="col-dislike" class="color-picker" value="#ff7675" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Like Button Text</label>
-                    <input type="color" id="col-like-btn" class="color-picker" value="#F0FFF0" oninput="updateSetupPreview()">
-                </div>
-                <div class="config-item">
-                    <label>Dislike Button Text</label>
-                    <input type="color" id="col-dislike-btn" class="color-picker" value="#F0FFF0" oninput="updateSetupPreview()">
-                </div>
-            </div>
-            <div class="config-item" style="margin-bottom:10px;">
-                <label>Widget Padding</label>
-                <input type="text" id="setup-widget-padding" class="setup-input" value="10px" oninput="updateSetupPreview()">
-            </div>
-
-            <div class="config-item" style="margin-bottom:10px;">
-                <label>Global Background Image (Optional)</label>
-                <input type="text" id="setup-bg-image" class="setup-input" placeholder="https://..." oninput="updateSetupPreview()">
-            </div>
-
-            <div class="config-item">
-                <label>Allow Comments?</label>
-                <select id="setup-comments" class="setup-input" onchange="updateSetupPreview()">
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                </select>
-            </div>
-
-            <h3 style="border-bottom:1px dotted #555; margin: 20px 0 10px 0;">4. Advanced</h3>
-            <div class="config-item">
-                <label>Custom CSS (Overrides style.css)</label>
-                <textarea id="setup-custom-css" class="setup-input" rows="4" placeholder="body { font-family: 'Arial'; }" oninput="updateSetupPreview()"></textarea>
-            </div>
-
-            <button class="action-btn" onclick="generateConfigFile('setup')" style="margin-top:20px;">GENERATE system.js</button>
-            <p style="font-size:11px; color:#666; margin-top:10px; text-align:center;">
-                This will download 'system.js'. Upload it to your site folder to launch.
-            </p>
+            <div id="upload-error-log" class="error-details"></div>
+            <button id="upload-close-btn" class="action-btn" style="margin-top:15px; display:none;" onclick="hideUploadModal()">Close</button>
         </div>
     </div>
 
+    <!-- Setup Wizard -->
+    <div id="setup-overlay" style="display:none;">
+        <div class="setup-box">
+            <h1 style="color:var(--accent-color); margin-bottom:20px; text-align:center;">SYSTEM BOOT // INITIAL SETUP</h1>
+            <h3 style="border-bottom:1px dotted #555; margin-bottom:10px;">1. System Configuration</h3>
+            <p style="font-size:11px; color:#aaa; margin-bottom:10px;">Configure admin credentials and API connectivity.</p>
+            <form onsubmit="return false;">
+                <input type="text" name="username" autocomplete="username" style="display:none;">
+                <label style="font-size:11px; color:#aaa; margin-top:10px;">Create Admin Password:</label>
+                <input type="password" id="setup-password" class="setup-input" placeholder="Password" autocomplete="new-password">
+                <label style="font-size:11px; color:#aaa; margin-top:10px; display:block;">Neocities API Key:</label>
+                <input type="password" id="setup-neocities-key" class="setup-input" placeholder="Paste Key Here..." autocomplete="off">
+            </form>
+
+            <h3 style="border-bottom:1px dotted #555; margin: 20px 0 10px 0;">2. Branding</h3>
+            <div class="config-grid">
+                <div class="config-item"><label>Site Name</label><input type="text" id="setup-site-name" class="setup-input" value="LBM // System" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Tagline</label><input type="text" id="setup-tagline" class="setup-input" value="Personal Archive" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Leaflets Tab</label><input type="text" id="setup-leaflets-name" class="setup-input" value="Leaflets" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Copyright</label><input type="text" id="setup-copyright" class="setup-input" value="2025 LBM" oninput="updateSetupPreview()"></div>
+            </div>
+            <div class="config-item" style="margin-bottom:10px;"><label>Profile Picture URL</label><input type="text" id="setup-pfp-image" class="setup-input" placeholder="https://..." oninput="updateSetupPreview()"></div>
+            <div class="config-item" style="margin-bottom:10px;"><label>Header Banner URL</label><input type="text" id="setup-banner-image" class="setup-input" placeholder="https://..." oninput="updateSetupPreview()"></div>
+
+            <h3 style="border-bottom:1px dotted #555; margin: 20px 0 10px 0;">3. Theme</h3>
+            <div class="config-grid">
+                <div class="config-item"><label>Background</label><input type="color" id="col-bg" class="color-picker" value="#2B2B2B" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Text</label><input type="color" id="col-text" class="color-picker" value="#F0FFF0" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Sidebar/Footer</label><input type="color" id="col-sidebar" class="color-picker" value="#3B3B3B" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Accent</label><input type="color" id="col-accent" class="color-picker" value="#76c7c0" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Post Bg</label><input type="color" id="col-leaflet" class="color-picker" value="#353535" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Borders</label><input type="color" id="col-border" class="color-picker" value="#555555" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Active Nav</label><input type="color" id="col-nav-active" class="color-picker" value="#FFFFFF" oninput="updateSetupPreview()"></div>
+            </div>
+
+            <button class="action-btn" onclick="generateConfigFile('setup')" style="margin-top:20px;">GENERATE system.js</button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
     <div class="container">
         <header id="site-header-block">
             <div class="header-overlay">
@@ -192,7 +135,7 @@ applchu wuz here
                             <div id="header-tagline" class="site-tagline"></div>
                         </div>
                     </div>
-                    <div id="db-status">Initializing System...</div>
+                    <div id="db-status">Booting...</div>
                 </div>
             </div>
         </header>
@@ -206,121 +149,106 @@ applchu wuz here
             </nav>
 
             <main>
-                <!-- MODULE: FEED -->
+                <!-- Feed -->
                 <section id="tab-leaflets" class="view-section active">
                     <h2 id="header-leaflets-title">Recent Updates</h2>
-                    <div id="leaflets-container">Loading...</div>
+                    <div id="leaflets-container">Loading content...</div>
                 </section>
 
-                <!-- MODULE: GALLERY -->
+                <!-- Gallery -->
                 <section id="tab-gallery" class="view-section">
                     <h2>Image Gallery</h2>
                     <div id="gallery-container" class="gallery-grid">Loading...</div>
                 </section>
 
-                <!-- MODULE: ADMIN -->
+                <!-- Admin -->
                 <section id="tab-admin" class="view-section">
                     <h2>Admin // Login</h2>
-
                     <div id="admin-login-form" class="admin-panel">
-                        <p style="margin-bottom:15px; color:#aaa;">Enter your admin password to access posting and site settings.</p>
-                        <input type="password" id="login-pass" class="setup-input" placeholder="Password" style="margin-bottom:10px;">
-                        <button class="action-btn" onclick="adminLogin()">Access System</button>
+                        <p style="margin-bottom:15px; color:#aaa;">Enter your admin password.</p>
+                        <form onsubmit="adminLogin(); return false;">
+                            <input type="text" name="username" autocomplete="username" style="display:none;">
+                            <input type="password" id="login-pass" class="setup-input" placeholder="Password" style="margin-bottom:10px;" autocomplete="current-password">
+                            <button class="action-btn" type="submit">Access System</button>
+                        </form>
                     </div>
 
                     <div id="admin-dashboard" style="display:none;">
+                        <div class="sync-status">
+                            <div id="sync-dot" class="sync-indicator synced"></div>
+                            <span id="sync-text">System Synced</span>
+                            <div style="margin-left: auto; display:flex; gap:5px;">
+                                <button onclick="forceSyncAll()" class="reaction-btn" style="color:var(--accent-color); border-color:var(--accent-color);">FORCE SYNC</button>
+                                <button onclick="downloadBackup()" class="reaction-btn" title="Download Backup">⬇ JS</button>
+                                <button onclick="downloadStaticIndex()" class="reaction-btn" title="Download Static HTML for SEO" style="border-color:#aaa;">⬇ HTML</button>
+                            </div>
+                        </div>
+
                         <div style="display:flex; gap:10px; margin-bottom:15px;">
                             <button class="action-btn" onclick="switchAdminSubTab('post')" style="flex:1;">New Post</button>
                             <button class="action-btn" onclick="switchAdminSubTab('settings')" style="flex:1; background:#444;">Site Settings</button>
                             <button class="action-btn" onclick="location.reload()" style="flex:0; background:#ff7675;">Logout</button>
                         </div>
 
+                        <!-- Post Sub-Tab -->
                         <div id="admin-sub-post" class="admin-panel">
                             <h3>Create New Content</h3>
-                            <p style="font-size:11px; color:#aaa; margin-bottom:5px;">Markdown is supported! (**bold**, *italic*, [link](url))</p>
                             <div class="form-group" style="margin-bottom: 15px;">
-                                <textarea id="admin-content" rows="4" placeholder="What's on your mind?" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #555;"></textarea>
+                                <textarea id="admin-content" rows="4" placeholder="What's on your mind? (Markdown supported)" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #555;"></textarea>
                             </div>
                             <div class="form-group" style="margin-bottom: 15px;">
-                                <label style="color:var(--accent-color); display:block; margin-bottom:5px;">Media Upload (Generate Path)</label>
+                                <label style="color:var(--accent-color); display:block; margin-bottom:5px;">Media Upload (Will upload to img/)</label>
                                 <div class="file-upload-wrapper">
                                     <input type="file" id="file-selector" onchange="handleFileSelect()" accept="image/*,video/*">
-                                    <img id="upload-preview" class="preview-thumb">
+                                    <div id="upload-file-info" style="display:none; margin-left:10px; font-size:11px; color:var(--accent-color);"></div>
                                 </div>
                             </div>
                             <div class="form-group" style="margin-bottom: 15px;">
                                 <input type="text" id="admin-media" placeholder="Media Path (e.g. img/photo.jpg)" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #555;">
                             </div>
-                            <button class="action-btn" onclick="addPost()">Post to Database</button>
+                            <button class="action-btn" onclick="addPost()">Post & Sync</button>
                         </div>
 
+                        <!-- Settings Sub-Tab -->
                         <div id="admin-sub-settings" class="admin-panel" style="display:none;">
-                            <h3>Customize Site Design</h3>
-                            <p style="font-size:11px; color:#aaa; margin-bottom:15px;">Changes you make here will appear <strong>instantly</strong>. Click Export to save them permanently.</p>
-
-                            <div class="config-grid">
-                                <div class="config-item">
-                                    <label>Site Name</label>
-                                    <input type="text" id="edit-site-name" class="setup-input" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Tagline</label>
-                                    <input type="text" id="edit-tagline" class="setup-input" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Leaflets Tab Name</label>
-                                    <input type="text" id="edit-leaflets-name" class="setup-input" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Copyright</label>
-                                    <input type="text" id="edit-copyright" class="setup-input" oninput="updateLivePreview()">
-                                </div>
+                            <h3>System Configuration</h3>
+                            <div class="config-item" style="margin-bottom:15px; border-bottom:1px dotted #555; padding-bottom:15px;">
+                                <form onsubmit="return false;">
+                                    <label style="color:#ff7675;">Neocities API Key</label>
+                                    <input type="password" id="neocities-api-key" class="setup-input" placeholder="Key..." onchange="saveLocals()" autocomplete="off" style="margin-bottom:5px;">
+                                </form>
                             </div>
 
+                            <h3>SEO & Metadata</h3>
                             <div class="config-grid">
-                                <div class="config-item">
-                                    <label>PFP URL</label>
-                                    <input type="text" id="edit-pfp-image" class="setup-input" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Banner URL</label>
-                                    <input type="text" id="edit-banner-image" class="setup-input" oninput="updateLivePreview()">
-                                </div>
+                                <div class="config-item"><label>Window Title</label><input type="text" id="edit-window-title" class="setup-input" placeholder="My Blog" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Meta Description</label><input type="text" id="edit-meta-desc" class="setup-input" placeholder="A brief description..." oninput="updateLivePreview()"></div>
+                            </div>
+
+                            <h3 style="margin-top:15px;">Visual Customization</h3>
+                            <div class="config-grid">
+                                <div class="config-item"><label>Site Name</label><input type="text" id="edit-site-name" class="setup-input" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Tagline</label><input type="text" id="edit-tagline" class="setup-input" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Leaflets Name</label><input type="text" id="edit-leaflets-name" class="setup-input" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Copyright</label><input type="text" id="edit-copyright" class="setup-input" oninput="updateLivePreview()"></div>
+                            </div>
+                            <div class="config-grid">
+                                <div class="config-item"><label>PFP URL</label><input type="text" id="edit-pfp-image" class="setup-input" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Banner URL</label><input type="text" id="edit-banner-image" class="setup-input" oninput="updateLivePreview()"></div>
                             </div>
 
                             <h4>Colors & Theme</h4>
                             <div class="config-grid">
-                                <div class="config-item">
-                                    <label>Background</label>
-                                    <input type="color" id="edit-col-bg" class="color-picker" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Text</label>
-                                    <input type="color" id="edit-col-text" class="color-picker" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Sidebar/Footer</label>
-                                    <input type="color" id="edit-col-sidebar" class="color-picker" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Accent</label>
-                                    <input type="color" id="edit-col-accent" class="color-picker" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Post Bg</label>
-                                    <input type="color" id="edit-col-leaflet" class="color-picker" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Borders</label>
-                                    <input type="color" id="edit-col-border" class="color-picker" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Active Nav Text</label>
-                                    <input type="color" id="edit-col-nav-active" class="color-picker" oninput="updateLivePreview()">
-                                </div>
+                                <div class="config-item"><label>Bg</label><input type="color" id="edit-col-bg" class="color-picker" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Text</label><input type="color" id="edit-col-text" class="color-picker" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Sidebar</label><input type="color" id="edit-col-sidebar" class="color-picker" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Accent</label><input type="color" id="edit-col-accent" class="color-picker" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Post Bg</label><input type="color" id="edit-col-leaflet" class="color-picker" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Borders</label><input type="color" id="edit-col-border" class="color-picker" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Active Nav</label><input type="color" id="edit-col-nav-active" class="color-picker" oninput="updateLivePreview()"></div>
                             </div>
 
-                            <h4>Reaction Settings</h4>
+                            <h4>Interaction Settings</h4>
                             <div class="config-grid">
                                 <div class="config-item">
                                     <label>Enable?</label>
@@ -332,48 +260,23 @@ applchu wuz here
                                 <div class="config-item">
                                     <label>Icon Style</label>
                                     <select id="edit-reaction-icon" class="setup-input" onchange="updateLivePreview()">
-                                        <option value="face">Faces (^_^)</option>
-                                        <option value="thumb">Thumbs 👍</option>
-                                        <option value="arrow">Arrows ⬆</option>
+                                        <option value="face">Faces</option>
+                                        <option value="thumb">Thumbs</option>
+                                        <option value="arrow">Arrows</option>
                                     </select>
                                 </div>
-                                <div class="config-item">
-                                    <label>Like Label</label>
-                                    <input type="text" id="edit-like-label" class="setup-input" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Dislike Label</label>
-                                    <input type="text" id="edit-dislike-label" class="setup-input" oninput="updateLivePreview()">
-                                </div>
+                                <div class="config-item"><label>Like Label</label><input type="text" id="edit-like-label" class="setup-input" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Dislike Label</label><input type="text" id="edit-dislike-label" class="setup-input" oninput="updateLivePreview()"></div>
                             </div>
                             <div class="config-grid">
-                                <div class="config-item">
-                                    <label>Like Meter</label>
-                                    <input type="color" id="edit-col-like" class="color-picker" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Dislike Meter</label>
-                                    <input type="color" id="edit-col-dislike" class="color-picker" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Like Text</label>
-                                    <input type="color" id="edit-col-like-btn" class="color-picker" oninput="updateLivePreview()">
-                                </div>
-                                <div class="config-item">
-                                    <label>Dislike Text</label>
-                                    <input type="color" id="edit-col-dislike-btn" class="color-picker" oninput="updateLivePreview()">
-                                </div>
+                                <div class="config-item"><label>Like Color</label><input type="color" id="edit-col-like" class="color-picker" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Dislike Color</label><input type="color" id="edit-col-dislike" class="color-picker" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Like Text</label><input type="color" id="edit-col-like-btn" class="color-picker" oninput="updateLivePreview()"></div>
+                                <div class="config-item"><label>Dislike Text</label><input type="color" id="edit-col-dislike-btn" class="color-picker" oninput="updateLivePreview()"></div>
                             </div>
-                            <div class="config-item" style="margin-bottom:15px;">
-                                <label>Widget Padding</label>
-                                <input type="text" id="edit-widget-padding" class="setup-input" oninput="updateLivePreview()">
-                            </div>
-
-                            <div class="config-item" style="margin-bottom:15px;">
-                                <label>Global Background Image</label>
-                                <input type="text" id="edit-bg-image" class="setup-input" oninput="updateLivePreview()">
-                            </div>
-
+                            
+                            <div class="config-item" style="margin-bottom:15px;"><label>Widget Padding</label><input type="text" id="edit-widget-padding" class="setup-input" oninput="updateLivePreview()"></div>
+                            <div class="config-item" style="margin-bottom:15px;"><label>Global Background Image</label><input type="text" id="edit-bg-image" class="setup-input" oninput="updateLivePreview()"></div>
                             <div class="config-item" style="margin-bottom:15px;">
                                 <label>Comments</label>
                                 <select id="edit-comments" class="setup-input" onchange="updateLivePreview()">
@@ -381,15 +284,13 @@ applchu wuz here
                                     <option value="false">No</option>
                                 </select>
                             </div>
-
                             <div class="config-item" style="margin-bottom:15px;">
                                 <label>Custom CSS</label>
                                 <textarea id="edit-custom-css" class="setup-input" rows="6" oninput="updateLivePreview()"></textarea>
                             </div>
 
-                            <button class="action-btn" onclick="generateConfigFile('edit')">Export New Configuration</button>
+                            <button class="action-btn" onclick="saveSystem()">Save Settings & Sync</button>
                         </div>
-
                     </div>
                 </section>
             </main>
@@ -398,11 +299,11 @@ applchu wuz here
 
     <footer>
         <div id="footer-text" style="text-align: center; margin-top: 30px; border-top: 1px dotted var(--border-color); padding: 10px; color: #666;">
-            &copy; 2025 LBM | Cloud System
+            &copy; 2025 LBM
         </div>
     </footer>
 
-    <!-- MODULE: POST DETAIL LIGHTBOX -->
+    <!-- Overlays -->
     <div id="leaflet-lightbox" class="lightbox" onclick="if(event.target === this) closeLightbox()">
         <div class="lightbox-content">
             <span class="close-btn" onclick="closeLightbox()">&times;</span>
@@ -410,32 +311,47 @@ applchu wuz here
         </div>
     </div>
 
-    <!-- MODULE: FULLSCREEN MEDIA OVERLAY -->
     <div id="media-fullscreen-overlay" class="media-overlay" onclick="closeMediaViewer()">
         <span class="close-media-btn" onclick="closeMediaViewer()">&times;</span>
         <div id="media-content-wrapper" onclick="event.stopPropagation()"></div>
     </div>
 
-    <!-- MODULE: SYSTEM LOADER -->
-    <script src="system.js" onerror="window.systemMissing=true;"></script>
-
+    <!-- MAIN SYSTEM LOGIC -->
     <script>
-        // --- SECTION: DEFAULTS ---
-        let db;
-        let postsCache = [];
+        // --- CONSTANTS ---
+        const FIXED_BRIDGE_URL = "https://applchu.link/lbm/bridge.html";
+        const LOCAL_STORAGE_KEY = "LBM_CONFIG_CACHE";
+        
+        // --- STATE ---
+        let postsCache = []; 
+        let interactionsCache = {}; 
+        let currentUploadFile = null;
+        let globalAdminHash = null;
+        let globalApiKey = null;
+        let isAdminLoggedIn = false;
+        let currentLoadingToast = null;
+        let pendingPost = null;
+        
+        // Gallery State
+        let currentLightboxPostId = null; 
+        let currentMediaList = [];
+        let currentMediaIndex = 0;
+        
+        // Default Config
         let currentConfig = {
             siteName: "LBM // System",
+            metaTitle: "LBM System",
+            metaDescription: "A personal microblogging archive.",
             tagline: "Personal Archive",
             leafletsName: "Leaflets",
             allowComments: true,
-            copyright: "2025 LBM | Cloud System",
+            copyright: "2025 LBM",
             bgImage: "",
             bannerImage: "",
             pfpImage: "",
             customCss: "",
-            // Reaction Configs
             reactionsEnabled: true,
-            reactionIcon: "face", // face, thumb, arrow
+            reactionIcon: "face",
             likeLabel: "(＾∇＾)",
             dislikeLabel: "(；へ：)",
             widgetPadding: "10px",
@@ -446,673 +362,667 @@ applchu wuz here
                 likeBtn: "#F0FFF0", dislikeBtn: "#F0FFF0"
             }
         };
-        let globalFirebaseConfig = null;
-        let globalAdminHash = null;
-        let isAdminLoggedIn = false; // Track login state for delete button
-    
-        // --- SECTION: UTILS ---
-        // Fix for InvalidCharacterError with emojis/unicode
-        function unicodeToBase64(str) {
-            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
-                function toSolidBytes(match, p1) {
-                    return String.fromCharCode('0x' + p1);
-            }));
-        }
-    
-        function base64ToUnicode(str) {
-            return decodeURIComponent(atob(str).split('').map(function(c) {
-                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-        }
-    
-        // --- SECTION: BOOT ---
-        window.onload = function() {
-            if (window.systemMissing || typeof window.AZUMINT_SYSTEM === 'undefined') {
-                console.log("System file missing.");
-                showSetup();
-            } else {
-                try {
-                    // Decode system data using the Unicode-safe method
-                    const jsonStr = base64ToUnicode(window.AZUMINT_SYSTEM);
-                    const data = JSON.parse(jsonStr);
-                    
-                    globalFirebaseConfig = data.firebaseConfig;
-                    globalAdminHash = data.adminHash;
-                    // Merge defaults to handle upgrades
-                    currentConfig = {
-                        ...currentConfig, 
-                        ...data.siteConfig, 
-                        colors: {...currentConfig.colors, ...(data.siteConfig.colors || {})}
-                    };
-                    
-                    applyVisualConfig();
-                    initSystem();
-                } catch(e) {
-                    console.error("Config Parse Error", e);
-                    // Attempt fallback for older files (non-unicode safe)
-                    try {
-                        const legacyJson = atob(window.AZUMINT_SYSTEM);
-                        const data = JSON.parse(legacyJson);
-                        globalFirebaseConfig = data.firebaseConfig;
-                        globalAdminHash = data.adminHash;
-                        currentConfig = {...currentConfig, ...data.siteConfig, colors: {...currentConfig.colors, ...(data.siteConfig.colors || {})}};
-                        applyVisualConfig();
-                        initSystem();
-                    } catch(e2) {
-                        alert("Error reading system.js. File might be corrupted.");
-                        showSetup();
-                    }
-                }
-            }
-        };
-    
-        function showSetup() {
-            document.getElementById('setup-overlay').style.display = 'flex';
-            document.title = "System Setup";
-            document.getElementById('db-status').innerText = "Pending Setup...";
-        }
-    
-        // --- SECTION: PREVIEW & UPDATE ---
-        // Helper to sync inputs for Setup Mode
-        function updateSetupPreview() {
-            currentConfig.siteName = document.getElementById('setup-site-name').value;
-            currentConfig.tagline = document.getElementById('setup-tagline').value;
-            currentConfig.leafletsName = document.getElementById('setup-leaflets-name').value;
-            currentConfig.copyright = document.getElementById('setup-copyright').value;
-            currentConfig.allowComments = document.getElementById('setup-comments').value === 'true';
-            currentConfig.bgImage = document.getElementById('setup-bg-image').value;
-            currentConfig.pfpImage = document.getElementById('setup-pfp-image').value;
-            currentConfig.bannerImage = document.getElementById('setup-banner-image').value;
-            currentConfig.customCss = document.getElementById('setup-custom-css').value;
-            
-            currentConfig.reactionsEnabled = document.getElementById('setup-reactions-enabled').value === 'true';
-            currentConfig.reactionIcon = document.getElementById('setup-reaction-icon').value;
-            currentConfig.likeLabel = document.getElementById('setup-like-label').value;
-            currentConfig.dislikeLabel = document.getElementById('setup-dislike-label').value;
-            currentConfig.widgetPadding = document.getElementById('setup-widget-padding').value;
-            
-            currentConfig.colors.bg = document.getElementById('col-bg').value;
-            currentConfig.colors.text = document.getElementById('col-text').value;
-            currentConfig.colors.sidebar = document.getElementById('col-sidebar').value;
-            currentConfig.colors.accent = document.getElementById('col-accent').value;
-            currentConfig.colors.leaflet = document.getElementById('col-leaflet').value;
-            currentConfig.colors.border = document.getElementById('col-border').value;
-            currentConfig.colors.navActive = document.getElementById('col-nav-active').value;
-            
-            currentConfig.colors.like = document.getElementById('col-like').value;
-            currentConfig.colors.dislike = document.getElementById('col-dislike').value;
-            currentConfig.colors.likeBtn = document.getElementById('col-like-btn').value;
-            currentConfig.colors.dislikeBtn = document.getElementById('col-dislike-btn').value;
-    
-            applyVisualConfig();
-            // Force redraw of leaflets to show new reaction icons
-            renderLeaflets();
-        }
-    
-        // Helper to sync inputs for Edit Mode (Admin Panel)
-        function updateLivePreview() {
-            currentConfig.siteName = document.getElementById('edit-site-name').value;
-            currentConfig.tagline = document.getElementById('edit-tagline').value;
-            currentConfig.leafletsName = document.getElementById('edit-leaflets-name').value;
-            currentConfig.copyright = document.getElementById('edit-copyright').value;
-            currentConfig.allowComments = document.getElementById('edit-comments').value === 'true';
-            currentConfig.bgImage = document.getElementById('edit-bg-image').value;
-            currentConfig.pfpImage = document.getElementById('edit-pfp-image').value;
-            currentConfig.bannerImage = document.getElementById('edit-banner-image').value;
-            currentConfig.customCss = document.getElementById('edit-custom-css').value;
-            
-            currentConfig.reactionsEnabled = document.getElementById('edit-reactions-enabled').value === 'true';
-            currentConfig.reactionIcon = document.getElementById('edit-reaction-icon').value;
-            currentConfig.likeLabel = document.getElementById('edit-like-label').value;
-            currentConfig.dislikeLabel = document.getElementById('edit-dislike-label').value;
-            currentConfig.widgetPadding = document.getElementById('edit-widget-padding').value;
-            
-            currentConfig.colors.bg = document.getElementById('edit-col-bg').value;
-            currentConfig.colors.text = document.getElementById('edit-col-text').value;
-            currentConfig.colors.sidebar = document.getElementById('edit-col-sidebar').value;
-            currentConfig.colors.accent = document.getElementById('edit-col-accent').value;
-            currentConfig.colors.leaflet = document.getElementById('edit-col-leaflet').value;
-            currentConfig.colors.border = document.getElementById('edit-col-border').value;
-            currentConfig.colors.navActive = document.getElementById('edit-col-nav-active').value;
-            
-            currentConfig.colors.like = document.getElementById('edit-col-like').value;
-            currentConfig.colors.dislike = document.getElementById('edit-col-dislike').value;
-            currentConfig.colors.likeBtn = document.getElementById('edit-col-like-btn').value;
-            currentConfig.colors.dislikeBtn = document.getElementById('edit-col-dislike-btn').value;
-    
-            applyVisualConfig();
-            // Force redraw of leaflets to show new reaction icons
-            renderLeaflets();
-        }
-    
-        // Applies the currentConfig state to the DOM
-        function applyVisualConfig() {
-            document.title = currentConfig.siteName;
-            document.getElementById('header-site-name').innerText = currentConfig.siteName;
-            document.getElementById('header-tagline').innerText = currentConfig.tagline || "";
-            document.getElementById('nav-leaflets-btn').innerText = currentConfig.leafletsName;
-            document.getElementById('header-leaflets-title').innerText = "Recent " + currentConfig.leafletsName;
-            document.getElementById('footer-text').innerHTML = "&copy; " + currentConfig.copyright;
-    
-            // Apply Colors
-            const r = document.documentElement.style;
-            r.setProperty('--background-color', currentConfig.colors.bg);
-            r.setProperty('--text-color', currentConfig.colors.text);
-            r.setProperty('--sidebar-bg', currentConfig.colors.sidebar);
-            r.setProperty('--header-footer-color', currentConfig.colors.sidebar);
-            r.setProperty('--accent-color', currentConfig.colors.accent);
-            r.setProperty('--leaflet-bg', currentConfig.colors.leaflet);
-            r.setProperty('--border-color', currentConfig.colors.border);
-            r.setProperty('--nav-active-color', currentConfig.colors.navActive);
-            
-            r.setProperty('--like-color', currentConfig.colors.like);
-            r.setProperty('--dislike-color', currentConfig.colors.dislike);
-            r.setProperty('--like-btn-color', currentConfig.colors.likeBtn);
-            r.setProperty('--dislike-btn-color', currentConfig.colors.dislikeBtn);
-            r.setProperty('--widget-padding', currentConfig.widgetPadding);
-            
-            // Backgrounds
-            if(currentConfig.bgImage && currentConfig.bgImage.length > 5) {
-                r.setProperty('--bg-image', `url('${currentConfig.bgImage}')`);
-            } else {
-                r.setProperty('--bg-image', 'none');
-            }
-    
-            // Header Identity
-            const pfpEl = document.getElementById('header-pfp');
-            if (currentConfig.pfpImage && currentConfig.pfpImage.length > 5) {
-                pfpEl.src = currentConfig.pfpImage;
-                pfpEl.style.display = 'block';
-            } else {
-                pfpEl.style.display = 'none';
-            }
-    
-            const headerEl = document.getElementById('site-header-block');
-            if (currentConfig.bannerImage && currentConfig.bannerImage.length > 5) {
-                headerEl.style.backgroundImage = `url('${currentConfig.bannerImage}')`;
-            } else {
-                headerEl.style.backgroundImage = 'none';
-            }
-    
-            // Apply Custom CSS
-            const customStyleId = 'custom-css-block';
-            let customStyle = document.getElementById(customStyleId);
-            if (!customStyle) {
-                customStyle = document.createElement('style');
-                customStyle.id = customStyleId;
-                document.head.appendChild(customStyle);
-            }
-            customStyle.textContent = currentConfig.customCss || '';
-        }
-    
-        function initSystem() {
-            try {
-                if(firebase.apps.length === 0) {
-                    firebase.initializeApp(globalFirebaseConfig);
-                }
-                db = firebase.firestore();
-                document.getElementById('db-status').innerText = "System Online";
-                document.getElementById('db-status').classList.add('online');
-                startListener();
-            } catch (e) {
-                console.error("Firebase Init Error:", e);
-                document.getElementById('db-status').innerText = "Database Error";
-            }
-        }
-    
-        // --- SECTION: CONFIG GENERATION (SETUP & EDIT) ---
+
+        // --- UTILS ---
+        function unicodeToBase64(str) { return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1))); }
+        function base64ToUnicode(str) { return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')); }
         async function sha256(message) {
             const msgBuffer = new TextEncoder().encode(message);
             const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
             return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
         }
-    
-        async function generateConfigFile(mode) {
-            let rawConfig, password, siteData, fbConfigObj;
-    
-            if (mode === 'setup') {
-                rawConfig = document.getElementById('setup-config-text').value;
-                password = document.getElementById('setup-password').value;
-                if (!rawConfig.includes('apiKey') || !password) return alert("Missing Firebase Config or Password.");
-                
-                let cleanConfig = rawConfig.trim();
-                if(cleanConfig.startsWith('const')) cleanConfig = cleanConfig.replace(/const\s+firebaseConfig\s*=\s*/, '');
-                if(cleanConfig.endsWith(';')) cleanConfig = cleanConfig.slice(0, -1);
-                
-                try {
-                    fbConfigObj = new Function("return " + cleanConfig)();
-                } catch(e) {
-                    return alert("Invalid Firebase Config format.");
+
+        // --- CORE INITIALIZATION ---
+        window.onload = async function() {
+            // 1. Immediate Local Config Load (Fixes Flash of Unstyled Content)
+            loadFromLocalCache();
+
+            // 2. Setup Bridge Listener
+            window.addEventListener('message', handleBridgeMessage);
+            injectBridge(FIXED_BRIDGE_URL);
+
+            // 3. Dynamic Script Loading with Cache Busting (Fixes Reload Issue)
+            const timestamp = new Date().getTime();
+            const loadScript = (src) => new Promise((resolve) => {
+                const s = document.createElement('script');
+                s.src = `${src}?v=${timestamp}`;
+                s.onload = resolve;
+                s.onerror = () => { console.warn(`Skipping ${src} (Not found)`); resolve(); }; // Continue even if files missing
+                document.body.appendChild(s);
+            });
+
+            await Promise.all([loadScript('system.js'), loadScript('interactions.js')]);
+
+            // 4. Parse Remote Data
+            parseSystemData();
+        };
+
+        function loadFromLocalCache() {
+            try {
+                const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+                if (cached) {
+                    const localData = JSON.parse(cached);
+                    // Merge local data into default to ensure new fields (like meta) exist
+                    currentConfig = { ...currentConfig, ...localData, colors: { ...currentConfig.colors, ...(localData.colors || {}) } };
+                    applyVisualConfig(); // Apply immediately
+                    console.log("[LBM] Loaded config from LocalStorage.");
                 }
-    
-                siteData = {
-                    siteName: document.getElementById('setup-site-name').value,
-                    tagline: document.getElementById('setup-tagline').value,
-                    leafletsName: document.getElementById('setup-leaflets-name').value,
-                    copyright: document.getElementById('setup-copyright').value,
-                    allowComments: document.getElementById('setup-comments').value === 'true',
-                    bgImage: document.getElementById('setup-bg-image').value,
-                    pfpImage: document.getElementById('setup-pfp-image').value,
-                    bannerImage: document.getElementById('setup-banner-image').value,
-                    customCss: document.getElementById('setup-custom-css').value,
-                    
-                    reactionsEnabled: document.getElementById('setup-reactions-enabled').value === 'true',
-                    reactionIcon: document.getElementById('setup-reaction-icon').value,
-                    likeLabel: document.getElementById('setup-like-label').value,
-                    dislikeLabel: document.getElementById('setup-dislike-label').value,
-                    widgetPadding: document.getElementById('setup-widget-padding').value,
-                    
-                    colors: {
-                        bg: document.getElementById('col-bg').value,
-                        text: document.getElementById('col-text').value,
-                        sidebar: document.getElementById('col-sidebar').value,
-                        accent: document.getElementById('col-accent').value,
-                        leaflet: document.getElementById('col-leaflet').value,
-                        border: document.getElementById('col-border').value,
-                        navActive: document.getElementById('col-nav-active').value,
-                        like: document.getElementById('col-like').value,
-                        dislike: document.getElementById('col-dislike').value,
-                        likeBtn: document.getElementById('col-like-btn').value,
-                        dislikeBtn: document.getElementById('col-dislike-btn').value
-                    }
-                };
+            } catch (e) { console.error("[LBM] LocalStorage Error", e); }
+        }
+
+        function saveToLocalCache() {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentConfig));
+            } catch(e) { console.error("Could not save to LocalStorage", e); }
+        }
+
+        function parseSystemData() {
+            // Check Interactions
+            if (typeof window.AZUMINT_INTERACTIONS !== 'undefined') {
+                try {
+                    const iJson = base64ToUnicode(window.AZUMINT_INTERACTIONS);
+                    interactionsCache = JSON.parse(iJson);
+                } catch(e) { console.error("Interactions Parse Error", e); }
+            }
+
+            // Check System
+            if (typeof window.AZUMINT_SYSTEM === 'undefined') {
+                console.log("System file missing. Starting Setup.");
+                showSetup();
             } else {
-                fbConfigObj = globalFirebaseConfig;
-                password = null;
-    
-                siteData = {
-                    siteName: document.getElementById('edit-site-name').value,
-                    tagline: document.getElementById('edit-tagline').value,
-                    leafletsName: document.getElementById('edit-leaflets-name').value,
-                    copyright: document.getElementById('edit-copyright').value,
-                    allowComments: document.getElementById('edit-comments').value === 'true',
-                    bgImage: document.getElementById('edit-bg-image').value,
-                    pfpImage: document.getElementById('edit-pfp-image').value,
-                    bannerImage: document.getElementById('edit-banner-image').value,
-                    customCss: document.getElementById('edit-custom-css').value,
+                try {
+                    const jsonStr = base64ToUnicode(window.AZUMINT_SYSTEM);
+                    const data = JSON.parse(jsonStr);
                     
-                    reactionsEnabled: document.getElementById('edit-reactions-enabled').value === 'true',
-                    reactionIcon: document.getElementById('edit-reaction-icon').value,
-                    likeLabel: document.getElementById('edit-like-label').value,
-                    dislikeLabel: document.getElementById('edit-dislike-label').value,
-                    widgetPadding: document.getElementById('edit-widget-padding').value,
+                    globalAdminHash = data.adminHash;
+                    postsCache = data.posts || [];
+                    if (data.apiKey) globalApiKey = data.apiKey;
                     
-                    colors: {
-                        bg: document.getElementById('edit-col-bg').value,
-                        text: document.getElementById('edit-col-text').value,
-                        sidebar: document.getElementById('edit-col-sidebar').value,
-                        accent: document.getElementById('edit-col-accent').value,
-                        leaflet: document.getElementById('edit-col-leaflet').value,
-                        border: document.getElementById('edit-col-border').value,
-                        navActive: document.getElementById('edit-col-nav-active').value,
-                        like: document.getElementById('edit-col-like').value,
-                        dislike: document.getElementById('edit-col-dislike').value,
-                        likeBtn: document.getElementById('edit-col-like-btn').value,
-                        dislikeBtn: document.getElementById('edit-col-dislike-btn').value
+                    // Merge Remote Config over Local (Server Authority)
+                    if (data.siteConfig) {
+                        currentConfig = { 
+                            ...currentConfig, 
+                            ...data.siteConfig, 
+                            colors: {...currentConfig.colors, ...(data.siteConfig.colors || {})}
+                        };
+                        saveToLocalCache(); // Update local cache with fresh server data
                     }
-                };
+                    
+                    applyVisualConfig();
+                    renderLeaflets();
+                    renderGallery();
+                    
+                    document.getElementById('db-status').innerText = "System Online";
+                    document.getElementById('db-status').classList.add('online');
+                    
+                    // Legacy API Key Support
+                    const k = localStorage.getItem('neocities_api_key');
+                    if(k && !globalApiKey) {
+                        document.getElementById('neocities-api-key').value = k;
+                        globalApiKey = k;
+                    }
+                } catch(e) {
+                    console.error("Config Parse Error", e);
+                    showToast("Error reading system.js.", "error");
+                    showSetup();
+                }
+            }
+        }
+
+        function handleBridgeMessage(e) {
+            if(e.data.type === 'UPLOAD_RESULT') {
+                if (currentLoadingToast && currentLoadingToast.parentNode) currentLoadingToast.remove();
+                
+                if(e.data.success) {
+                    if (pendingPost) {
+                        showToast("Image Uploaded! Saving Post...", "loading");
+                        postsCache.push(pendingPost);
+                        pendingPost = null; 
+                        saveSystem(); // Recurse to save system.js
+                        clearPostInputs();
+                        renderLeaflets();
+                        renderGallery();
+                    } else {
+                        hideUploadModal();
+                        showToast("Sync Successful!", "success");
+                        updateSyncStatus('synced', 'System Synced');
+                    }
+                } else {
+                    handleUploadError(e.data.message);
+                }
+            }
+        }
+
+        // --- BRIDGE & SYNC ---
+        function injectBridge(url) {
+            let frame = document.getElementById('bridge-frame');
+            if(!frame) {
+                frame = document.createElement('iframe');
+                frame.id = 'bridge-frame';
+                frame.style.display = 'none';
+                document.body.appendChild(frame);
+            }
+            frame.src = url;
+        }
+
+        async function saveSystem(mediaFile = null, explicitMediaPath = null) {
+            // 1. Update Local Cache First
+            if(isAdminLoggedIn) scrapeConfig('edit');
+            saveToLocalCache();
+
+            // 2. Network Upload
+            uploadToBridge('system', mediaFile, explicitMediaPath);
+        }
+        
+        async function saveInteractions() { uploadToBridge('interactions'); }
+        function forceSyncAll() { 
+            // Save local first to be safe
+            saveToLocalCache();
+            uploadToBridge('system'); 
+            setTimeout(() => uploadToBridge('interactions'), 2000); 
+        }
+
+        async function uploadToBridge(target, mediaFile = null, explicitMediaPath = null) {
+            if(!globalApiKey) {
+                showToast("No API Key found! Changes saved locally only.", "error");
+                markUnsynced();
+                return;
+            }
+
+            let fileContent = "";
+            let fileName = "";
+            let mediaName = null;
+
+            if (target === 'system') {
+                const data = await prepareSystemData('edit');
+                const encodedStr = unicodeToBase64(JSON.stringify(data));
+                fileContent = `window.AZUMINT_SYSTEM = "${encodedStr}";`;
+                fileName = "system.js";
+            } else if (target === 'interactions') {
+                const encodedStr = unicodeToBase64(JSON.stringify(interactionsCache));
+                fileContent = `window.AZUMINT_INTERACTIONS = "${encodedStr}";`;
+                fileName = "interactions.js";
+                showToast("Syncing Interactions...", "loading");
+            }
+
+            if (mediaFile) {
+                const rawName = explicitMediaPath || document.getElementById('admin-media').value;
+                mediaName = (rawName && rawName.indexOf('/') === -1) ? 'img/' + rawName : rawName;
+            }
+
+            if (target === 'system' || target === 'media_only') {
+                showToast(mediaFile ? "Uploading Media..." : "Saving System...", "loading");
+                showUploadModal(mediaFile ? "Uploading Media..." : "Saving System...");
+            }
+
+            const frame = document.getElementById('bridge-frame');
+            if(frame) {
+                frame.contentWindow.postMessage({
+                    type: 'UPLOAD', apiKey: globalApiKey,
+                    fileContent: fileContent, filename: fileName, 
+                    mediaFile: mediaFile, mediaName: mediaName
+                }, FIXED_BRIDGE_URL);
+                
+                // Timeout Watchdog
+                setTimeout(() => { 
+                    const modal = document.getElementById('upload-modal');
+                    if(modal && modal.style.display === 'flex') {
+                        hideUploadModal();
+                        showToast("Request Timed Out", "error");
+                    }
+                }, 20000); 
+            } else {
+                showToast("Bridge disconnected. Refreshing...", "error");
+                injectBridge(FIXED_BRIDGE_URL);
+            }
+        }
+
+        // --- DATA PREP ---
+        async function prepareSystemData(mode) {
+            let hashVar, keyToSave = globalApiKey;
+
+            if (mode === 'setup') {
+                const pass = document.getElementById('setup-password').value;
+                if (!pass) return showToast("Password required.", "error");
+                const k = document.getElementById('setup-neocities-key').value;
+                if(k) { keyToSave = k; globalApiKey = k; }
+                scrapeConfig('setup');
+                hashVar = await sha256(pass);
+            } else {
+                if(isAdminLoggedIn) scrapeConfig('edit');
+                const k = document.getElementById('neocities-api-key').value;
+                if(k) { keyToSave = k; globalApiKey = k; }
+                hashVar = globalAdminHash;
+            }
+
+            return {
+                adminHash: hashVar,
+                siteConfig: currentConfig,
+                posts: postsCache,
+                apiKey: keyToSave
+            };
+        }
+
+        // --- UI & CONFIG ---
+        function scrapeConfig(prefix) {
+             const id = (name) => { const el = document.getElementById(prefix + '-' + name); return el ? el.value : ''; };
+             const col = (name) => { const el = document.getElementById((prefix === 'edit' ? 'edit-col-' : 'col-') + name); return el ? el.value : '#000000'; };
+             
+             currentConfig.siteName = id('site-name');
+             currentConfig.tagline = id('tagline');
+             currentConfig.leafletsName = id('leaflets-name');
+             currentConfig.copyright = id('copyright');
+             
+             // Meta Scrape
+             if (prefix === 'edit') {
+                 currentConfig.metaTitle = id('window-title') || currentConfig.siteName;
+                 currentConfig.metaDescription = id('meta-desc') || "";
+             }
+
+             const commentsEl = document.getElementById((prefix === 'edit' ? 'edit-' : 'setup-') + 'comments');
+             currentConfig.allowComments = commentsEl ? commentsEl.value === 'true' : true;
+             
+             currentConfig.bgImage = id('bg-image');
+             currentConfig.pfpImage = id('pfp-image');
+             currentConfig.bannerImage = id('banner-image');
+             currentConfig.customCss = id('custom-css');
+             
+             const reactionsEnabledEl = document.getElementById((prefix === 'edit' ? 'edit-' : 'setup-') + 'reactions-enabled');
+             currentConfig.reactionsEnabled = reactionsEnabledEl ? reactionsEnabledEl.value === 'true' : true;
+             
+             currentConfig.reactionIcon = id('reaction-icon');
+             currentConfig.likeLabel = id('like-label');
+             currentConfig.dislikeLabel = id('dislike-label');
+             currentConfig.widgetPadding = id('widget-padding');
+             
+             currentConfig.colors.bg = col('bg');
+             currentConfig.colors.text = col('text');
+             currentConfig.colors.sidebar = col('sidebar');
+             currentConfig.colors.accent = col('accent');
+             currentConfig.colors.leaflet = col('leaflet');
+             currentConfig.colors.border = col('border');
+             currentConfig.colors.navActive = col('nav-active');
+             currentConfig.colors.like = col('like');
+             currentConfig.colors.dislike = col('dislike');
+             currentConfig.colors.likeBtn = col('like-btn');
+             currentConfig.colors.dislikeBtn = col('dislike-btn');
+        }
+
+        function applyVisualConfig() {
+            // Meta Tags (Fixes "Loading...")
+            if (currentConfig.metaTitle) document.title = currentConfig.metaTitle;
+            else document.title = currentConfig.siteName;
+            
+            const metaDesc = document.getElementById('dynamic-desc');
+            if (metaDesc && currentConfig.metaDescription) metaDesc.setAttribute('content', currentConfig.metaDescription);
+
+            // Text
+            const setTxt = (id, txt) => { const el = document.getElementById(id); if(el) el.innerText = txt || ""; };
+            setTxt('header-site-name', currentConfig.siteName);
+            setTxt('header-tagline', currentConfig.tagline);
+            setTxt('nav-leaflets-btn', currentConfig.leafletsName);
+            setTxt('header-leaflets-title', "Recent " + currentConfig.leafletsName);
+            const foot = document.getElementById('footer-text');
+            if (foot) foot.innerHTML = "&copy; " + currentConfig.copyright;
+    
+            // CSS Variables
+            const r = document.documentElement.style;
+            const c = currentConfig.colors;
+            const setVar = (n, v) => r.setProperty(n, v);
+            setVar('--background-color', c.bg); setVar('--text-color', c.text); setVar('--sidebar-bg', c.sidebar);
+            setVar('--header-footer-color', c.sidebar); setVar('--accent-color', c.accent); setVar('--leaflet-bg', c.leaflet);
+            setVar('--border-color', c.border); setVar('--nav-active-color', c.navActive); setVar('--like-color', c.like);
+            setVar('--dislike-color', c.dislike); setVar('--like-btn-color', c.likeBtn); setVar('--dislike-btn-color', c.dislikeBtn);
+            setVar('--widget-padding', currentConfig.widgetPadding);
+            
+            // Images
+            if(currentConfig.bgImage && currentConfig.bgImage.length > 5) setVar('--bg-image', `url('${currentConfig.bgImage}')`);
+            else setVar('--bg-image', 'none');
+    
+            const pfpEl = document.getElementById('header-pfp');
+            if (pfpEl) {
+                if (currentConfig.pfpImage && currentConfig.pfpImage.length > 5) { pfpEl.src = currentConfig.pfpImage; pfpEl.style.display = 'block'; } 
+                else { pfpEl.style.display = 'none'; }
+            }
+            const headerEl = document.getElementById('site-header-block');
+            if (headerEl) {
+                if (currentConfig.bannerImage && currentConfig.bannerImage.length > 5) headerEl.style.backgroundImage = `url('${currentConfig.bannerImage}')`;
+                else headerEl.style.backgroundImage = 'none';
             }
     
-            let hashVar = (mode === 'setup') ? await sha256(password) : globalAdminHash;
-    
-            const fullConfig = {
-                firebaseConfig: fbConfigObj,
-                adminHash: hashVar,
-                siteConfig: siteData
-            };
-    
-            const jsonStr = JSON.stringify(fullConfig);
-            // USE NEW ENCODING METHOD
-            const encodedStr = unicodeToBase64(jsonStr);
-            
-            const fileContent = `window.AZUMINT_SYSTEM = "${encodedStr}";`;
-            
-            const blob = new Blob([fileContent], { type: "text/javascript" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "system.js";
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            alert("Config generated! Upload 'system.js' to your site folder.");
+            // Custom CSS
+            let customStyle = document.getElementById('custom-css-block');
+            if (!customStyle) { customStyle = document.createElement('style'); customStyle.id = 'custom-css-block'; document.head.appendChild(customStyle); }
+            customStyle.textContent = currentConfig.customCss || '';
         }
-    
-        // --- SECTION: ADMIN AUTH ---
+        
+        function updateSetupPreview() { scrapeConfig('setup'); applyVisualConfig(); }
+        function updateLivePreview() { scrapeConfig('edit'); applyVisualConfig(); markUnsynced(); }
+        
+        // --- ADMIN AUTH ---
         async function adminLogin() {
-            const inputPass = document.getElementById('login-pass').value;
-            if(!globalAdminHash) return alert("Config missing.");
+            const passEl = document.getElementById('login-pass');
+            if(!globalAdminHash) return showToast("Config missing.", "error");
             
-            const inputHash = await sha256(inputPass);
+            const inputHash = await sha256(passEl.value);
             if(inputHash === globalAdminHash) {
-                isAdminLoggedIn = true; // Flag for UI elements
+                isAdminLoggedIn = true;
                 document.getElementById('admin-login-form').style.display = 'none';
                 document.getElementById('admin-dashboard').style.display = 'block';
-                document.getElementById('login-pass').value = '';
-                
-                // Re-render posts to show delete buttons
-                renderLeaflets();
-                renderGallery();
-                
-                document.getElementById('edit-site-name').value = currentConfig.siteName;
-                document.getElementById('edit-tagline').value = currentConfig.tagline;
-                document.getElementById('edit-leaflets-name').value = currentConfig.leafletsName;
-                document.getElementById('edit-copyright').value = currentConfig.copyright;
-                document.getElementById('edit-comments').value = currentConfig.allowComments;
-                document.getElementById('edit-bg-image').value = currentConfig.bgImage;
-                document.getElementById('edit-pfp-image').value = currentConfig.pfpImage;
-                document.getElementById('edit-banner-image').value = currentConfig.bannerImage;
-                document.getElementById('edit-custom-css').value = currentConfig.customCss;
-                
-                document.getElementById('edit-reactions-enabled').value = currentConfig.reactionsEnabled;
-                document.getElementById('edit-reaction-icon').value = currentConfig.reactionIcon;
-                document.getElementById('edit-like-label').value = currentConfig.likeLabel;
-                document.getElementById('edit-dislike-label').value = currentConfig.dislikeLabel;
-                document.getElementById('edit-widget-padding').value = currentConfig.widgetPadding;
-                
-                document.getElementById('edit-col-bg').value = currentConfig.colors.bg;
-                document.getElementById('edit-col-text').value = currentConfig.colors.text;
-                document.getElementById('edit-col-sidebar').value = currentConfig.colors.sidebar;
-                document.getElementById('edit-col-accent').value = currentConfig.colors.accent;
-                document.getElementById('edit-col-leaflet').value = currentConfig.colors.leaflet;
-                document.getElementById('edit-col-border').value = currentConfig.colors.border;
-                document.getElementById('edit-col-nav-active').value = currentConfig.colors.navActive;
-                
-                document.getElementById('edit-col-like').value = currentConfig.colors.like;
-                document.getElementById('edit-col-dislike').value = currentConfig.colors.dislike;
-                document.getElementById('edit-col-like-btn').value = currentConfig.colors.likeBtn;
-                document.getElementById('edit-col-dislike-btn').value = currentConfig.colors.dislikeBtn;
+                passEl.value = '';
+                populateAdminFields();
+                renderLeaflets(); // Re-render to show delete buttons
             } else {
-                alert("Incorrect Password");
+                showToast("Incorrect Password", "error");
             }
         }
-    
-        function switchAdminSubTab(tab) {
-            document.getElementById('admin-sub-post').style.display = 'none';
-            document.getElementById('admin-sub-settings').style.display = 'none';
-            document.getElementById('admin-sub-'+tab).style.display = 'block';
-        }
-    
-        // --- SECTION: DATABASE LOGIC ---
-        function startListener() {
-            if (!db) return;
-            db.collection("posts").orderBy("id", "desc").onSnapshot((snapshot) => {
-                postsCache = [];
-                snapshot.forEach((doc) => {
-                    postsCache.push({ uid: doc.id, ...doc.data() });
-                });
-                renderLeaflets();
-                renderGallery();
-                if(currentLightboxPostId) {
-                    const updatedPost = postsCache.find(p => p.id === currentLightboxPostId);
-                    // If post deleted while open, close lightbox
-                    if(!updatedPost) {
-                        closeLightbox();
-                    } else {
-                        renderLightboxContent(updatedPost);
-                    }
-                }
-            });
-        }
-    
-        function renderLeaflets() {
-            const container = document.getElementById('leaflets-container');
-            if(postsCache.length === 0) { container.innerHTML = `<p>No ${currentConfig.leafletsName} yet.</p>`; return; }
-            container.innerHTML = '';
+
+        function populateAdminFields() {
+            const id = (n) => document.getElementById('edit-' + n);
+            const col = (n) => document.getElementById('edit-col-' + n);
             
-            postsCache.forEach(post => {
-                const total = (post.likes || 0) + (post.dislikes || 0);
-                const ratio = total === 0 ? 50 : (post.likes / total) * 100;
-                const type = getMediaType(post.media);
-                let mediaHtml = '';
-                if (post.media) {
-                    if (type === 'video') mediaHtml = `<div class="leaflet-media-container"><video controls loop muted playsinline onclick="event.stopPropagation(); openMediaViewer('${post.media}', 'video')"><source src="${post.media}" type="video/mp4"></video></div>`;
-                    else mediaHtml = `<div class="leaflet-media-container"><img src="${post.media}" alt="Attached Media" onclick="event.stopPropagation(); openMediaViewer('${post.media}', 'image')"></div>`;
-                }
-                const postContentHtml = typeof marked !== 'undefined' ? marked.parse(post.content) : post.content;
-                
-                // AVATAR
-                let avatarContent = '🌿';
-                if(currentConfig.pfpImage && currentConfig.pfpImage.length > 5) {
-                    avatarContent = `<img src="${currentConfig.pfpImage}" style="width:100%; height:100%; object-fit:cover;">`;
-                }
-                
-                // REACTION LOGIC
-                let reactionHtml = '';
-                if (currentConfig.reactionsEnabled) {
-                    let likeTxt = currentConfig.likeLabel;
-                    let dislikeTxt = currentConfig.dislikeLabel;
-                    if(currentConfig.reactionIcon === 'thumb') { likeTxt = '👍'; dislikeTxt = '👎'; }
-                    if(currentConfig.reactionIcon === 'arrow') { likeTxt = '▲'; dislikeTxt = '▼'; }
-                    
-                    reactionHtml = `
-                    <div class="reaction-widget" onclick="event.stopPropagation()">
-                        <button class="reaction-btn like-btn" onclick="handleReaction('${post.uid}', 'like', ${post.likes || 0})">${post.likes || 0} ${likeTxt}</button>
-                        <div class="reaction-bar"><div class="reaction-fill" style="width: ${ratio}%"></div></div>
-                        <button class="reaction-btn dislike-btn" onclick="handleReaction('${post.uid}', 'dislike', ${post.dislikes || 0})">${dislikeTxt} ${post.dislikes || 0}</button>
-                    </div>`;
-                }
-    
-                // ADMIN DELETE BUTTON
-                let deleteBtn = '';
-                if (isAdminLoggedIn) {
-                    deleteBtn = `<button class="delete-btn" onclick="deletePost('${post.uid}', event)">[x] Delete</button>`;
-                }
-    
-                const html = `
-                <article class="leaflet-item" onclick="openLightbox(${post.id})">
-                    <div class="leaflet-avatar">${avatarContent}</div>
-                    <div class="leaflet-body">
-                        <div class="leaflet-header">
-                            <span class="leaflet-author">Admin</span><span>${post.date}</span>
-                            ${deleteBtn}
-                        </div>
-                        <div class="leaflet-content"><div>${postContentHtml}</div>${mediaHtml}</div>
-                        ${reactionHtml}
-                    </div>
-                </article>`;
-                container.innerHTML += html;
-            });
+            id('site-name').value = currentConfig.siteName;
+            id('tagline').value = currentConfig.tagline;
+            id('leaflets-name').value = currentConfig.leafletsName;
+            id('copyright').value = currentConfig.copyright;
+            id('window-title').value = currentConfig.metaTitle || "";
+            id('meta-desc').value = currentConfig.metaDescription || "";
+            
+            id('comments').value = currentConfig.allowComments;
+            id('bg-image').value = currentConfig.bgImage;
+            id('pfp-image').value = currentConfig.pfpImage;
+            id('banner-image').value = currentConfig.bannerImage;
+            id('custom-css').value = currentConfig.customCss;
+            if(globalApiKey) document.getElementById('neocities-api-key').value = globalApiKey;
+
+            id('reactions-enabled').value = currentConfig.reactionsEnabled;
+            id('reaction-icon').value = currentConfig.reactionIcon;
+            id('like-label').value = currentConfig.likeLabel;
+            id('dislike-label').value = currentConfig.dislikeLabel;
+            id('widget-padding').value = currentConfig.widgetPadding;
+            
+            col('bg').value = currentConfig.colors.bg; col('text').value = currentConfig.colors.text;
+            col('sidebar').value = currentConfig.colors.sidebar; col('accent').value = currentConfig.colors.accent;
+            col('leaflet').value = currentConfig.colors.leaflet; col('border').value = currentConfig.colors.border;
+            col('nav-active').value = currentConfig.colors.navActive; col('like').value = currentConfig.colors.like;
+            col('dislike').value = currentConfig.colors.dislike; col('like-btn').value = currentConfig.colors.likeBtn;
+            col('dislike-btn').value = currentConfig.colors.dislikeBtn;
         }
-    
-        function renderGallery() {
-            const container = document.getElementById('gallery-container');
-            const galleryItems = postsCache.filter(p => p.media);
-            if(galleryItems.length === 0) { container.innerHTML = "<p>No images.</p>"; return; }
-            container.innerHTML = '';
-            galleryItems.forEach(item => {
-                const type = getMediaType(item.media);
-                // Hover effects for video in gallery
-                let mediaElement = type === 'video' 
-                    ? `<video src="${item.media}" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video><div class="video-indicator">VIDEO</div>` 
-                    : `<img src="${item.media}" loading="lazy">`;
-                // Click now opens Media Viewer directly instead of Post Details
-                container.innerHTML += `<div class="gallery-item" onclick="openMediaViewer('${item.media}', '${type}')">${mediaElement}</div>`;
-            });
-        }
-    
-        function handleReaction(docUid, type, currentCount) {
-            if (!db) return;
-            const update = {};
-            update[type === 'like' ? 'likes' : 'dislikes'] = currentCount + 1;
-            db.collection("posts").doc(docUid).update(update);
-        }
-    
+
+        // --- CONTENT MANAGEMENT ---
         function addPost() {
             const content = document.getElementById('admin-content').value;
             const media = document.getElementById('admin-media').value;
-            if (!content) return alert("Content required");
-            const newPost = {
-                id: Date.now(),
-                date: new Date().toISOString().slice(0, 16).replace('T', ' '),
-                content: content,
-                media: media,
-                likes: 0, dislikes: 0, comments: []
-            };
-            db.collection("posts").add(newPost).then(() => {
-                alert("Posted!");
-                document.getElementById('admin-content').value = '';
-                document.getElementById('admin-media').value = '';
-                document.getElementById('file-selector').value = '';
-                document.getElementById('upload-preview').style.display = 'none';
-            });
-        }
-    
-        // Delete Post
-        function deletePost(docUid, event) {
-            event.stopPropagation(); // Prevent lightbox opening
-            if (!confirm("Are you sure you want to delete this post? This cannot be undone.")) return;
+            if (!content) return showToast("Content required", "error");
             
-            db.collection("posts").doc(docUid).delete().then(() => {
-                console.log("Post successfully deleted!");
-                // UI updates automatically via snapshot listener
-            }).catch((error) => {
-                console.error("Error removing post: ", error);
-                alert("Error deleting post: " + error.message);
-            });
+            const newPost = { id: Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '), content: content, media: media };
+            
+            if (currentUploadFile) {
+                pendingPost = newPost;
+                uploadToBridge('media_only', currentUploadFile, media);
+            } else {
+                postsCache.push(newPost);
+                saveSystem(); 
+                clearPostInputs();
+                renderLeaflets();
+            }
         }
-    
-        // --- SECTION: LIGHTBOX ---
-        let currentLightboxPostId = null;
+
+        function deletePost(postId, event) {
+            event.stopPropagation();
+            if (!confirm("Delete post?")) return;
+            postsCache = postsCache.filter(p => p.id !== postId);
+            renderLeaflets();
+            saveSystem(); 
+        }
+
+        // --- RENDERING ---
+        function renderLeaflets() {
+            const container = document.getElementById('leaflets-container');
+            const posts = [...postsCache].sort((a,b) => b.id - a.id);
+            if(posts.length === 0) { container.innerHTML = `<p>No ${currentConfig.leafletsName} yet.</p>`; return; }
+            
+            container.innerHTML = posts.map(post => {
+                const ints = interactionsCache[post.id] || { likes: 0, dislikes: 0 };
+                const total = (ints.likes || 0) + (ints.dislikes || 0);
+                const ratio = total === 0 ? 50 : (ints.likes / total) * 100;
+                
+                let mediaHtml = '';
+                if (post.media) {
+                    const type = getMediaType(post.media);
+                    if (type === 'video') mediaHtml = `<div class="leaflet-media-container"><video controls loop muted playsinline onclick="event.stopPropagation(); openMediaViewer('${post.media}', 'video')"><source src="${post.media}" type="video/mp4"></video></div>`;
+                    else mediaHtml = `<div class="leaflet-media-container"><img src="${post.media}" alt="Media" onclick="event.stopPropagation(); openMediaViewer('${post.media}', 'image')" onerror="this.style.display='none'"></div>`;
+                }
+                
+                const contentHtml = typeof marked !== 'undefined' ? marked.parse(post.content) : post.content;
+                const avatar = (currentConfig.pfpImage && currentConfig.pfpImage.length > 5) ? `<img src="${currentConfig.pfpImage}" style="width:100%; height:100%; object-fit:cover;">` : '🌿';
+                const authorName = currentConfig.siteName || "Admin";
+
+                let reactions = '';
+                if (currentConfig.reactionsEnabled) {
+                    let [lTxt, dTxt] = [currentConfig.likeLabel, currentConfig.dislikeLabel];
+                    if(currentConfig.reactionIcon === 'thumb') [lTxt, dTxt] = ['👍', '👎'];
+                    if(currentConfig.reactionIcon === 'arrow') [lTxt, dTxt] = ['▲', '▼'];
+                    
+                    reactions = `
+                    <div class="reaction-widget" onclick="event.stopPropagation()">
+                        <button class="reaction-btn like-btn" onclick="handleReaction(${post.id}, 'like')">${ints.likes || 0} ${lTxt}</button>
+                        <div class="reaction-bar"><div class="reaction-fill" style="width: ${ratio}%"></div></div>
+                        <button class="reaction-btn dislike-btn" onclick="handleReaction(${post.id}, 'dislike')">${dTxt} ${ints.dislikes || 0}</button>
+                    </div>`;
+                }
+
+                const delBtn = isAdminLoggedIn ? `<button class="delete-btn" onclick="deletePost(${post.id}, event)">[x] Delete</button>` : '';
+
+                return `
+                <article class="leaflet-item" onclick="openLightbox(${post.id})">
+                    <div class="leaflet-avatar">${avatar}</div>
+                    <div class="leaflet-body">
+                        <div class="leaflet-header"><span class="leaflet-author">${authorName}</span><span>${post.date}</span>${delBtn}</div>
+                        <div class="leaflet-content"><div>${contentHtml}</div>${mediaHtml}</div>
+                        ${reactions}
+                    </div>
+                </article>`;
+            }).join('');
+        }
+
+        function renderGallery() {
+            const container = document.getElementById('gallery-container');
+            const items = [...postsCache].sort((a,b) => b.id - a.id).filter(p => p.media);
+            if(items.length === 0) { container.innerHTML = "<p>No images.</p>"; return; }
+            container.innerHTML = items.map(item => {
+                const type = getMediaType(item.media);
+                const el = type === 'video' ? `<video src="${item.media}" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video>` : `<img src="${item.media}" loading="lazy">`;
+                return `<div class="gallery-item" onclick="openMediaViewer('${item.media}', '${type}')">${el}</div>`;
+            }).join('');
+        }
+
+        // --- INTERACTIONS & LIGHTBOX ---
+        function handleReaction(postId, type) {
+            if(!interactionsCache[postId]) interactionsCache[postId] = { likes: 0, dislikes: 0, comments: [] };
+            interactionsCache[postId][type + 's'] = (interactionsCache[postId][type + 's'] || 0) + 1;
+            renderLeaflets();
+            if(globalApiKey) saveInteractions(); else markUnsynced();
+        }
+
         function openLightbox(postId) {
-            currentLightboxPostId = postId;
             const post = postsCache.find(p => p.id === postId);
             if(!post) return;
-            renderLightboxContent(post);
-            document.getElementById('leaflet-lightbox').classList.add('open');
-            document.body.classList.add('modal-open');
-        }
-    
-        function renderLightboxContent(post) {
-            const body = document.getElementById('lightbox-body');
-            const comments = post.comments || [];
+            currentLightboxPostId = postId;
             
-            let commentsHtml = '';
-            if (currentConfig.allowComments) {
-                const renderTree = (parentId, depth) => {
-                    const children = comments.filter(c => c.parentId === parentId);
-                    if(!children.length) return '';
-                    let h = `<ul class="${depth>0?'reply-list':'comments-list'}">`;
-                    children.forEach(c => {
-                        let deleteBtn = '';
-                        if(isAdminLoggedIn) {
-                            deleteBtn = `<button class="delete-btn" style="float:right; font-size:10px;" onclick="deleteComment('${post.uid}', ${c.id})">[x]</button>`;
-                        }
-                        
-                        h += `<li class="comment-item">
-                                <div class="comment-header">
-                                    <span class="comment-author">${c.author}</span>
-                                    <span>${c.date}</span>
-                                    ${deleteBtn}
-                                </div>
-                                <div class="comment-text">${c.text}</div>
-                                <button class="reply-btn" onclick="setReplyTarget(${c.id}, '${c.author}')">Reply</button>
-                                ${renderTree(c.id, depth+1)}
-                              </li>`;
-                    });
-                    return h + '</ul>';
-                };
-    
-                commentsHtml = `<div class="comments-section">
-                    <h3>Comments</h3>
-                    <div id="comments-container">${comments.length ? renderTree(null, 0) : '<p>No comments.</p>'}</div>
-                    <div class="comment-form">
-                        <h4>Add Comment</h4>
-                        <input type="text" id="comment-author" placeholder="Name">
-                        <input type="hidden" id="comment-parent-id" value="">
-                        <div id="reply-display" style="display:none;font-size:11px;color:var(--accent-color);">Replying to <span id="reply-name"></span> <button onclick="cancelReply()">(x)</button></div>
-                        <textarea id="comment-text" rows="2" placeholder="Write a comment..."></textarea>
-                        <button class="action-btn" onclick="submitComment('${post.uid}')">Post</button>
-                    </div>
-                </div>`;
-            } else {
-                commentsHtml = `<div class="comments-section"><p style="color:#888; text-align:center;">Comments are disabled.</p></div>`;
-            }
-    
+            const body = document.getElementById('lightbox-body');
+            const ints = interactionsCache[postId] || { comments: [] };
+            const comments = ints.comments || [];
+            
+            // Re-construct post display logic for lightbox
             let mediaHtml = '';
             if (post.media) {
-                 const type = getMediaType(post.media);
-                 if (type === 'video') mediaHtml = `<div class="leaflet-media-container"><video controls autoplay loop muted playsinline style="width:100%" onclick="openMediaViewer('${post.media}', 'video')"><source src="${post.media}" type="video/mp4"></video></div>`;
-                 else mediaHtml = `<div class="leaflet-media-container"><img src="${post.media}" style="width:100%" onclick="openMediaViewer('${post.media}', 'image')"></div>`;
+                const type = getMediaType(post.media);
+                if (type === 'video') mediaHtml = `<div class="leaflet-media-container"><video controls autoplay loop muted playsinline style="width:100%" onclick="openMediaViewer('${post.media}', 'video')"><source src="${post.media}" type="video/mp4"></video></div>`;
+                else mediaHtml = `<div class="leaflet-media-container"><img src="${post.media}" alt="Attached Media" onclick="openMediaViewer('${post.media}', 'image')" onerror="this.style.display='none'"></div>`;
             }
-    
-            const postContentHtml = typeof marked !== 'undefined' ? marked.parse(post.content) : post.content;
-    
-            // AVATAR LOGIC
-            let avatarContent = '🌿';
-            if(currentConfig.pfpImage && currentConfig.pfpImage.length > 5) {
-                avatarContent = `<img src="${currentConfig.pfpImage}" style="width:100%; height:100%; object-fit:cover;">`;
+            
+            const contentHtml = typeof marked !== 'undefined' ? marked.parse(post.content) : post.content;
+            const avatar = (currentConfig.pfpImage && currentConfig.pfpImage.length > 5) ? `<img src="${currentConfig.pfpImage}" style="width:100%; height:100%; object-fit:cover;">` : '🌿';
+            const authorName = currentConfig.siteName || "Admin";
+
+            let commentsHtml = '';
+            if (currentConfig.allowComments) {
+                const renderTree = (pid, d) => {
+                    const kids = comments.filter(c => c.parentId === pid);
+                    if(!kids.length) return '';
+                    return `<ul class="${d?'reply-list':'comments-list'}">` + kids.map(c => `
+                        <li class="comment-item">
+                            <div class="comment-header"><span class="comment-author">${c.author}</span><span>${c.date}</span>${isAdminLoggedIn ? `<button class="delete-btn" style="float:right;" onclick="deleteComment(${postId}, ${c.id})">[x]</button>` : ''}</div>
+                            <div>${c.text}</div>
+                            <button class="reply-btn" onclick="document.getElementById('comment-parent-id').value=${c.id};document.getElementById('reply-display').style.display='block';document.getElementById('reply-name').innerText='${c.author}'">Reply</button>
+                            ${renderTree(c.id, d+1)}
+                        </li>`).join('') + `</ul>`;
+                };
+                commentsHtml = `<div class="comments-section"><h3>Comments</h3><div id="comments-container">${renderTree(null, 0)}</div><div class="comment-form"><h4>Add Comment</h4><input type="text" id="comment-author" placeholder="Name"><input type="hidden" id="comment-parent-id"><div id="reply-display" style="display:none;font-size:11px;color:var(--accent-color);">Replying to <span id="reply-name"></span> <button onclick="this.parentNode.style.display='none';document.getElementById('comment-parent-id').value=''">x</button></div><textarea id="comment-text" rows="2" placeholder="Write..."></textarea><button class="action-btn" onclick="submitComment(${postId})">Post</button></div></div>`;
             }
-    
+
             body.innerHTML = `
                 <div class="leaflet-item" style="cursor:default;">
-                    <div class="leaflet-avatar">${avatarContent}</div>
+                    <div class="leaflet-avatar">${avatar}</div>
                     <div class="leaflet-body">
-                        <div class="leaflet-header"><span class="leaflet-author">Admin</span><span>${post.date}</span></div>
-                        <div class="leaflet-content"><div>${postContentHtml}</div>${mediaHtml}</div>
+                        <div class="leaflet-header"><span class="leaflet-author">${authorName}</span><span>${post.date}</span></div>
+                        <div class="leaflet-content"><div>${contentHtml}</div>${mediaHtml}</div>
                     </div>
                 </div>
                 ${commentsHtml}`;
-        }
-    
-        function submitComment(docUid) {
-            const author = document.getElementById('comment-author').value || "Guest";
-            let text = document.getElementById('comment-text').value;
-            const parentId = document.getElementById('comment-parent-id').value ? parseInt(document.getElementById('comment-parent-id').value) : null;
-            if (!text) return alert("Write something!");
-
-            const newComment = { id: Date.now(), author: author, text: text, date: new Date().toISOString().slice(0, 16).replace('T', ' '), parentId: parentId };
-            db.collection("posts").doc(docUid).update({ comments: firebase.firestore.FieldValue.arrayUnion(newComment) });
-        }
-        
-        function deleteComment(postUid, commentId) {
-            if(!confirm("Delete this comment?")) return;
-            const post = postsCache.find(p => p.uid === postUid);
-            if(!post) return;
-            const commentObj = post.comments.find(c => c.id === commentId);
-            if(!commentObj) return;
             
-            db.collection("posts").doc(postUid).update({
-                comments: firebase.firestore.FieldValue.arrayRemove(commentObj)
-            }).catch(err => alert(err.message));
-        }
-    
-        function setReplyTarget(id, name) { document.getElementById('comment-parent-id').value = id; document.getElementById('reply-name').innerText = name; document.getElementById('reply-display').style.display = 'block'; }
-        function cancelReply() { document.getElementById('comment-parent-id').value = ''; document.getElementById('reply-display').style.display = 'none'; }
-        function closeLightbox() { document.getElementById('leaflet-lightbox').classList.remove('open'); document.body.classList.remove('modal-open'); currentLightboxPostId = null; }
-        function getMediaType(url) { if (!url) return null; const ext = url.split('.').pop().toLowerCase(); if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image'; if (['mp4', 'webm', 'ogg'].includes(ext)) return 'video'; return 'image'; }
-        function handleFileSelect() { const file = document.getElementById('file-selector').files[0]; if (file) { document.getElementById('admin-media').value = `img/${file.name}`; document.getElementById('upload-preview').src = URL.createObjectURL(file); document.getElementById('upload-preview').style.display = 'block'; } }
-        function switchTab(tabName) { document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active')); document.getElementById(`tab-${tabName}`).classList.add('active'); if(tabName === 'admin') document.getElementById('admin-tab-btn').classList.add('active'); else if(tabName === 'leaflets') document.getElementById('nav-leaflets-btn').classList.add('active'); }
-
-        // --- SECTION: FULLSCREEN MEDIA VIEWER ---
-        function openMediaViewer(url, type) {
-            const overlay = document.getElementById('media-fullscreen-overlay');
-            const wrapper = document.getElementById('media-content-wrapper');
-            wrapper.innerHTML = '';
-            
-            if (type === 'video') {
-                wrapper.innerHTML = `<video controls autoplay loop style="width:auto; height:auto; max-width:95vw; max-height:95vh;"><source src="${url}" type="video/mp4"></video>`;
-            } else {
-                wrapper.innerHTML = `<img src="${url}" style="width:auto; height:auto; max-width:95vw; max-height:95vh;">`;
-            }
-            
-            overlay.classList.add('active');
+            document.getElementById('leaflet-lightbox').classList.add('open');
             document.body.classList.add('modal-open');
         }
 
-        function closeMediaViewer() {
-            const overlay = document.getElementById('media-fullscreen-overlay');
-            overlay.classList.remove('active');
-            // Only remove body modal-open if the detail lightbox isn't also open
-            if(!currentLightboxPostId) {
-                document.body.classList.remove('modal-open');
-            }
-            // Pause video on close
-            const video = overlay.querySelector('video');
-            if(video) video.pause();
+        function submitComment(postId) {
+            const author = document.getElementById('comment-author').value || "Guest";
+            const text = document.getElementById('comment-text').value;
+            if(!text) return;
+            const pidVal = document.getElementById('comment-parent-id').value;
+            
+            if(!interactionsCache[postId]) interactionsCache[postId] = { likes: 0, dislikes: 0, comments: [] };
+            if(!interactionsCache[postId].comments) interactionsCache[postId].comments = [];
+            
+            interactionsCache[postId].comments.push({ id: Date.now(), author, text, date: new Date().toISOString().slice(0,16).replace('T',' '), parentId: pidVal ? parseInt(pidVal) : null });
+            openLightbox(postId); // Refresh
+            if(globalApiKey) saveInteractions();
         }
+
+        function deleteComment(postId, cid) {
+            if(confirm("Delete?")) {
+                interactionsCache[postId].comments = interactionsCache[postId].comments.filter(c => c.id !== cid);
+                openLightbox(postId);
+                saveInteractions();
+            }
+        }
+
+        // --- EXPORT & UTILS ---
+        async function generateConfigFile(mode) {
+            const data = await prepareSystemData(mode);
+            if(!data) return;
+            const content = `window.AZUMINT_SYSTEM = "${unicodeToBase64(JSON.stringify(data))}";`;
+            downloadFile(content, "system.js");
+        }
+        
+        function downloadStaticIndex() {
+            // Apply current config to DOM, serialize, and download
+            applyVisualConfig();
+            // Remove bridge frame and scripts before export
+            const clone = document.documentElement.cloneNode(true);
+            const scripts = clone.querySelectorAll('script');
+            // We want to keep the main logic, but maybe we want to strip the system.js loaders? 
+            // For now, raw dump is fine as it allows the user to re-upload easily.
+            const html = "<!DOCTYPE html>\n" + clone.outerHTML;
+            downloadFile(html, "index.html");
+        }
+
+        function downloadFile(content, name) {
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
+            link.download = name;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        // --- HELPER WRAPPERS ---
+        function showSetup() { document.getElementById('setup-overlay').style.display = 'flex'; document.title = "System Setup"; }
+        function hideUploadModal() { const m = document.getElementById('upload-modal'); if(m) m.style.display='none'; document.getElementById('upload-progress-bar').style.width='0%'; }
+        function showUploadModal(txt) { document.getElementById('upload-modal').style.display='flex'; document.getElementById('upload-status-text').innerText=txt; document.getElementById('upload-error-log').style.display='none'; document.getElementById('upload-close-btn').style.display='none'; }
+        function handleUploadError(msg) { document.getElementById('upload-status-text').innerText="FAILED"; document.getElementById('upload-status-text').style.color="#ff7675"; document.getElementById('upload-error-log').innerText=msg; document.getElementById('upload-error-log').style.display='block'; document.getElementById('upload-close-btn').style.display='inline-block'; }
+        function showToast(msg, type='info') {
+            const t = document.createElement('div'); t.className=`toast ${type}`; 
+            t.innerHTML = type==='loading'?`<div class="toast-spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;
+            document.getElementById('toast-container').appendChild(t);
+            if(type==='loading') currentLoadingToast = t;
+            else setTimeout(() => { t.style.animation='fadeOut 0.5s forwards'; setTimeout(()=>t.remove(),500); }, 3000);
+        }
+        function updateSyncStatus(s,t) { const d=document.getElementById('sync-dot'); if(d) d.className='sync-indicator '+s; const tx=document.getElementById('sync-text'); if(tx) tx.innerText=t; }
+        function markUnsynced() { updateSyncStatus('unsynced', 'Unsaved Changes'); }
+        function handleFileSelect() { const f = document.getElementById('file-selector').files[0]; if(f) { currentUploadFile=f; document.getElementById('admin-media').value='img/'+f.name; document.getElementById('upload-file-info').innerText="Selected: "+f.name; document.getElementById('upload-file-info').style.display='inline-block'; } }
+        function clearPostInputs() { document.getElementById('admin-content').value=''; document.getElementById('admin-media').value=''; document.getElementById('file-selector').value=''; document.getElementById('upload-file-info').style.display='none'; currentUploadFile=null; }
+        function getMediaType(url) { if(!url) return null; const ext = url.split('.').pop().toLowerCase(); return ['mp4','webm','ogg'].includes(ext) ? 'video' : 'image'; }
+        
+        function switchTab(t) { document.querySelectorAll('.view-section').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(e=>e.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); if(t==='leaflets') document.getElementById('nav-leaflets-btn').classList.add('active'); if(t==='admin') document.getElementById('admin-tab-btn').classList.add('active'); }
+        function switchAdminSubTab(t) { document.getElementById('admin-sub-post').style.display='none'; document.getElementById('admin-sub-settings').style.display='none'; document.getElementById('admin-sub-'+t).style.display='block'; }
+        
+        // --- MEDIA VIEWER & NAVIGATION ---
+        function openMediaViewer(url, type) { 
+            // 1. Build Media List from Posts Cache
+            currentMediaList = [...postsCache]
+                .sort((a,b) => b.id - a.id)
+                .filter(p => p.media)
+                .map(p => ({ url: p.media, type: getMediaType(p.media) }));
+            
+            // 2. Find Index
+            currentMediaIndex = currentMediaList.findIndex(m => m.url === url);
+            
+            // 3. Fallback if media is strictly local or new
+            if(currentMediaIndex === -1) {
+                currentMediaList = [{url, type}];
+                currentMediaIndex = 0;
+            }
+
+            renderMediaOverlay();
+            document.getElementById('media-fullscreen-overlay').classList.add('active');
+            document.body.classList.add('modal-open'); 
+        }
+
+        function renderMediaOverlay() {
+            const item = currentMediaList[currentMediaIndex];
+            if(!item) return;
+            const w = document.getElementById('media-content-wrapper');
+            
+            // Generate Buttons
+            const btn = (dir, lbl) => `<button class="media-nav" onclick="event.stopPropagation(); navigateMedia(${dir})">${lbl}</button>`;
+            
+            const content = item.type === 'video' 
+                ? `<video controls autoplay loop style="max-width:80vw;max-height:90vh;box-shadow:0 0 20px rgba(0,0,0,0.5);"><source src="${item.url}"></video>` 
+                : `<img src="${item.url}" style="max-width:80vw;max-height:90vh;box-shadow:0 0 20px rgba(0,0,0,0.5);">`;
+                
+            w.innerHTML = btn(-1, '&lt;') + content + btn(1, '&gt;');
+        }
+
+        function navigateMedia(dir) {
+            currentMediaIndex += dir;
+            // Wrap around
+            if(currentMediaIndex < 0) currentMediaIndex = currentMediaList.length - 1;
+            if(currentMediaIndex >= currentMediaList.length) currentMediaIndex = 0;
+            renderMediaOverlay();
+        }
+
+        function closeMediaViewer() { 
+            document.getElementById('media-fullscreen-overlay').classList.remove('active'); 
+            // Fix: Check variable existence before accessing to prevent ReferenceError
+            if(typeof currentLightboxPostId === 'undefined' || !currentLightboxPostId) {
+                document.body.classList.remove('modal-open'); 
+            }
+            const v=document.querySelector('.media-overlay video'); 
+            if(v) v.pause(); 
+        }
+
+        function saveLocals() { const k=document.getElementById('neocities-api-key').value; if(k) globalApiKey=k; }
+        function closeLightbox() { document.getElementById('leaflet-lightbox').classList.remove('open'); document.body.classList.remove('modal-open'); currentLightboxPostId=null; }
     </script>
-
 </body>
-
 </html>

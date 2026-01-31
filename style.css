@@ -1,6 +1,6 @@
 /*
 LBM (Leaflet Blog Manager) // CSS
-Version: 0.1
+Version: 0.2
 License: MIT
 applchu wuz here
 */
@@ -67,7 +67,6 @@ a:hover {
 .container {
   max-width: 950px;
   margin: 0 auto;
-  padding: 20px;
   min-height: 90vh;
 }
 
@@ -154,6 +153,7 @@ header h1 {
 .layout-wrapper {
   display: flex;
   gap: 20px;
+  padding: 20px;
 }
 main {
   flex: 1;
@@ -250,7 +250,6 @@ h2 {
   color: #aaa;
 }
 .leaflet-author {
-  font-weight: bold;
   color: var(--text-color);
   margin-right: 8px;
 }
