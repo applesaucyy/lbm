@@ -94,8 +94,8 @@ applchu wuz here
                 <input type="text" name="username" autocomplete="username" style="display:none;">
                 <label style="font-size:11px; color:#aaa; margin-top:10px;">Create Admin Password:</label>
                 <input type="password" id="setup-password" class="setup-input" placeholder="Password" autocomplete="new-password">
-                <label style="font-size:11px; color:#aaa; margin-top:10px; display:block;">Neocities API Key:</label>
-                <input type="password" id="setup-neocities-key" class="setup-input" placeholder="Paste Key Here..." autocomplete="off">
+                <label style="font-size:11px; color:#aaa; margin-top:10px; display:block;">Neocities API Key (Optional):</label>
+                <input type="password" id="setup-neocities-key" class="setup-input" placeholder="Leave blank for self-host/local mode" autocomplete="off">
             </form>
 
             <h3 style="border-bottom:1px dotted #555; margin: 20px 0 10px 0;">2. Branding</h3>
@@ -117,6 +117,73 @@ applchu wuz here
                 <div class="config-item"><label>Post Bg</label><input type="color" id="col-leaflet" class="color-picker" value="#353535" oninput="updateSetupPreview()"></div>
                 <div class="config-item"><label>Borders</label><input type="color" id="col-border" class="color-picker" value="#555555" oninput="updateSetupPreview()"></div>
                 <div class="config-item"><label>Active Nav</label><input type="color" id="col-nav-active" class="color-picker" value="#FFFFFF" oninput="updateSetupPreview()"></div>
+            </div>
+
+            <h4 style="margin: 10px 0 5px 0; color: #aaa; border-bottom: 1px dotted #555;">Interaction Settings</h4>
+            <div class="config-grid">
+                <div class="config-item">
+                    <label>Enable Reactions?</label>
+                    <select id="setup-reactions-enabled" class="setup-input" onchange="updateSetupPreview()">
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+                <div class="config-item">
+                    <label>Icon Style</label>
+                    <select id="setup-reaction-icon" class="setup-input" onchange="updateSetupPreview()">
+                        <option value="face">Faces (^_^)</option>
+                        <option value="thumb">Thumbs 👍</option>
+                        <option value="arrow">Arrows ⬆</option>
+                    </select>
+                </div>
+                <div class="config-item">
+                    <label>Like Label</label>
+                    <input type="text" id="setup-like-label" class="setup-input" value="(＾∇＾)" oninput="updateSetupPreview()">
+                </div>
+                <div class="config-item">
+                    <label>Dislike Label</label>
+                    <input type="text" id="setup-dislike-label" class="setup-input" value="(；へ：)" oninput="updateSetupPreview()">
+                </div>
+            </div>
+            <div class="config-grid">
+                <div class="config-item">
+                    <label>Like Meter Color</label>
+                    <input type="color" id="col-like" class="color-picker" value="#76c7c0" oninput="updateSetupPreview()">
+                </div>
+                <div class="config-item">
+                    <label>Dislike Meter Color</label>
+                    <input type="color" id="col-dislike" class="color-picker" value="#ff7675" oninput="updateSetupPreview()">
+                </div>
+                <div class="config-item">
+                    <label>Like Button Text</label>
+                    <input type="color" id="col-like-btn" class="color-picker" value="#F0FFF0" oninput="updateSetupPreview()">
+                </div>
+                <div class="config-item">
+                    <label>Dislike Button Text</label>
+                    <input type="color" id="col-dislike-btn" class="color-picker" value="#F0FFF0" oninput="updateSetupPreview()">
+                </div>
+            </div>
+            <div class="config-item" style="margin-bottom:10px;">
+                <label>Widget Padding</label>
+                <input type="text" id="setup-widget-padding" class="setup-input" value="10px" oninput="updateSetupPreview()">
+            </div>
+
+            <div class="config-item" style="margin-bottom:10px;">
+                <label>Global Background Image (Optional)</label>
+                <input type="text" id="setup-bg-image" class="setup-input" placeholder="https://..." oninput="updateSetupPreview()">
+            </div>
+
+            <div class="config-item">
+                <label>Allow Comments?</label>
+                <select id="setup-comments" class="setup-input" onchange="updateSetupPreview()">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                </select>
+            </div>
+
+            <div class="config-item" style="margin-bottom:15px;">
+                <label>Custom CSS</label>
+                <textarea id="setup-custom-css" class="setup-input" rows="4" placeholder="body { font-family: 'Arial'; }" oninput="updateSetupPreview()"></textarea>
             </div>
 
             <button class="action-btn" onclick="generateConfigFile('setup')" style="margin-top:20px;">GENERATE system.js</button>
@@ -214,7 +281,7 @@ applchu wuz here
                             <h3>System Configuration</h3>
                             <div class="config-item" style="margin-bottom:15px; border-bottom:1px dotted #555; padding-bottom:15px;">
                                 <form onsubmit="return false;">
-                                    <label style="color:#ff7675;">Neocities API Key</label>
+                                    <label style="color:#ff7675;">Neocities API Key (Empty = Self Host)</label>
                                     <input type="password" id="neocities-api-key" class="setup-input" placeholder="Key..." onchange="saveLocals()" autocomplete="off" style="margin-bottom:5px;">
                                 </form>
                             </div>
@@ -322,6 +389,35 @@ applchu wuz here
         const FIXED_BRIDGE_URL = "https://applchu.link/lbm/bridge.html";
         const LOCAL_STORAGE_KEY = "LBM_CONFIG_CACHE";
         
+        // --- UTILITIES (Defined first to prevent hoisting issues) ---
+        function unicodeToBase64(str) { return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1))); }
+        function base64ToUnicode(str) { return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')); }
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function downloadFile(content, name) {
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
+            link.download = name;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+        
+        // GLOBAL SCOPE FUNCTION for button onclicks
+        window.downloadBackup = async function() { 
+            await generateConfigFile('edit'); 
+        };
+
+        function showToast(msg, type='info') {
+            const t = document.createElement('div'); t.className=`toast ${type}`; 
+            t.innerHTML = type==='loading'?`<div class="toast-spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;
+            document.getElementById('toast-container').appendChild(t);
+            if(type==='loading') currentLoadingToast = t;
+            else setTimeout(() => { t.style.animation='fadeOut 0.5s forwards'; setTimeout(()=>t.remove(),500); }, 3000);
+        }
+
         // --- STATE ---
         let postsCache = []; 
         let interactionsCache = {}; 
@@ -331,8 +427,6 @@ applchu wuz here
         let isAdminLoggedIn = false;
         let currentLoadingToast = null;
         let pendingPost = null;
-        
-        // Gallery State
         let currentLightboxPostId = null; 
         let currentMediaList = [];
         let currentMediaIndex = 0;
@@ -363,31 +457,30 @@ applchu wuz here
             }
         };
 
-        // --- UTILS ---
-        function unicodeToBase64(str) { return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1))); }
-        function base64ToUnicode(str) { return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')); }
-        async function sha256(message) {
-            const msgBuffer = new TextEncoder().encode(message);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
         // --- CORE INITIALIZATION ---
         window.onload = async function() {
-            // 1. Immediate Local Config Load (Fixes Flash of Unstyled Content)
+            // 1. Immediate Local Config Load
             loadFromLocalCache();
 
             // 2. Setup Bridge Listener
             window.addEventListener('message', handleBridgeMessage);
-            injectBridge(FIXED_BRIDGE_URL);
+            
+            // Only inject bridge if NOT on file protocol
+            if (window.location.protocol !== 'file:') {
+                injectBridge(FIXED_BRIDGE_URL);
+            }
 
-            // 3. Dynamic Script Loading with Cache Busting (Fixes Reload Issue)
+            // 3. Dynamic Script Loading with Error Suppression
             const timestamp = new Date().getTime();
             const loadScript = (src) => new Promise((resolve) => {
                 const s = document.createElement('script');
                 s.src = `${src}?v=${timestamp}`;
                 s.onload = resolve;
-                s.onerror = () => { console.warn(`Skipping ${src} (Not found)`); resolve(); }; // Continue even if files missing
+                // Suppress visual errors for missing files (first load)
+                s.onerror = () => { 
+                    console.log(`[LBM] Note: ${src} not found (fresh install?)`); 
+                    resolve(); 
+                }; 
                 document.body.appendChild(s);
             });
 
@@ -402,22 +495,18 @@ applchu wuz here
                 const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
                 if (cached) {
                     const localData = JSON.parse(cached);
-                    // Merge local data into default to ensure new fields (like meta) exist
                     currentConfig = { ...currentConfig, ...localData, colors: { ...currentConfig.colors, ...(localData.colors || {}) } };
-                    applyVisualConfig(); // Apply immediately
+                    applyVisualConfig();
                     console.log("[LBM] Loaded config from LocalStorage.");
                 }
             } catch (e) { console.error("[LBM] LocalStorage Error", e); }
         }
 
         function saveToLocalCache() {
-            try {
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentConfig));
-            } catch(e) { console.error("Could not save to LocalStorage", e); }
+            try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentConfig)); } catch(e) {}
         }
 
         function parseSystemData() {
-            // Check Interactions
             if (typeof window.AZUMINT_INTERACTIONS !== 'undefined') {
                 try {
                     const iJson = base64ToUnicode(window.AZUMINT_INTERACTIONS);
@@ -425,7 +514,6 @@ applchu wuz here
                 } catch(e) { console.error("Interactions Parse Error", e); }
             }
 
-            // Check System
             if (typeof window.AZUMINT_SYSTEM === 'undefined') {
                 console.log("System file missing. Starting Setup.");
                 showSetup();
@@ -438,14 +526,13 @@ applchu wuz here
                     postsCache = data.posts || [];
                     if (data.apiKey) globalApiKey = data.apiKey;
                     
-                    // Merge Remote Config over Local (Server Authority)
                     if (data.siteConfig) {
                         currentConfig = { 
                             ...currentConfig, 
                             ...data.siteConfig, 
                             colors: {...currentConfig.colors, ...(data.siteConfig.colors || {})}
                         };
-                        saveToLocalCache(); // Update local cache with fresh server data
+                        saveToLocalCache();
                     }
                     
                     applyVisualConfig();
@@ -455,7 +542,6 @@ applchu wuz here
                     document.getElementById('db-status').innerText = "System Online";
                     document.getElementById('db-status').classList.add('online');
                     
-                    // Legacy API Key Support
                     const k = localStorage.getItem('neocities_api_key');
                     if(k && !globalApiKey) {
                         document.getElementById('neocities-api-key').value = k;
@@ -478,7 +564,7 @@ applchu wuz here
                         showToast("Image Uploaded! Saving Post...", "loading");
                         postsCache.push(pendingPost);
                         pendingPost = null; 
-                        saveSystem(); // Recurse to save system.js
+                        saveSystem();
                         clearPostInputs();
                         renderLeaflets();
                         renderGallery();
@@ -506,25 +592,59 @@ applchu wuz here
         }
 
         async function saveSystem(mediaFile = null, explicitMediaPath = null) {
-            // 1. Update Local Cache First
             if(isAdminLoggedIn) scrapeConfig('edit');
             saveToLocalCache();
 
-            // 2. Network Upload
+            // FALLBACK LOGIC: LOCAL / SELF-HOSTED
+            if (!globalApiKey) {
+                // Scenario A: Running locally on file://
+                if (window.location.protocol === 'file:') {
+                    showToast("Downloading System.js (Local Mode)", "success");
+                    await generateConfigFile('edit');
+                    return;
+                }
+                
+                // Scenario B: Running on Generic Host (DreamHost etc)
+                console.log("[LBM] No API Key. Attempting Self-Hosted Write.");
+            }
+
             uploadToBridge('system', mediaFile, explicitMediaPath);
         }
         
-        async function saveInteractions() { uploadToBridge('interactions'); }
+        async function saveInteractions() { 
+            if(!globalApiKey && window.location.protocol === 'file:') {
+                 showToast("Saved Locally (Refresh to see)", "success");
+                 return;
+            }
+            uploadToBridge('interactions'); 
+        }
+
         function forceSyncAll() { 
-            // Save local first to be safe
             saveToLocalCache();
+            if (window.location.protocol === 'file:' && !globalApiKey) {
+                downloadBackup();
+                return;
+            }
             uploadToBridge('system'); 
             setTimeout(() => uploadToBridge('interactions'), 2000); 
         }
 
         async function uploadToBridge(target, mediaFile = null, explicitMediaPath = null) {
-            if(!globalApiKey) {
-                showToast("No API Key found! Changes saved locally only.", "error");
+            // Determine Key Mode
+            let apiKeyToSend = globalApiKey;
+            if (!apiKeyToSend && window.location.protocol !== 'file:') {
+                // Send flag for self-hosted mode
+                apiKeyToSend = "SELF_HOSTED";
+            }
+
+            if(!apiKeyToSend) {
+                // Safety net: If we end up here in file mode, trigger local save
+                if (window.location.protocol === 'file:') {
+                    showToast("Redirecting to local save...", "loading");
+                    saveSystem();
+                    return;
+                }
+                showToast("No API Key found. Saving locally...", "error");
                 markUnsynced();
                 return;
             }
@@ -558,12 +678,11 @@ applchu wuz here
             const frame = document.getElementById('bridge-frame');
             if(frame) {
                 frame.contentWindow.postMessage({
-                    type: 'UPLOAD', apiKey: globalApiKey,
+                    type: 'UPLOAD', apiKey: apiKeyToSend,
                     fileContent: fileContent, filename: fileName, 
                     mediaFile: mediaFile, mediaName: mediaName
                 }, FIXED_BRIDGE_URL);
                 
-                // Timeout Watchdog
                 setTimeout(() => { 
                     const modal = document.getElementById('upload-modal');
                     if(modal && modal.style.display === 'flex') {
@@ -613,7 +732,6 @@ applchu wuz here
              currentConfig.leafletsName = id('leaflets-name');
              currentConfig.copyright = id('copyright');
              
-             // Meta Scrape
              if (prefix === 'edit') {
                  currentConfig.metaTitle = id('window-title') || currentConfig.siteName;
                  currentConfig.metaDescription = id('meta-desc') || "";
@@ -649,14 +767,12 @@ applchu wuz here
         }
 
         function applyVisualConfig() {
-            // Meta Tags (Fixes "Loading...")
             if (currentConfig.metaTitle) document.title = currentConfig.metaTitle;
             else document.title = currentConfig.siteName;
             
             const metaDesc = document.getElementById('dynamic-desc');
             if (metaDesc && currentConfig.metaDescription) metaDesc.setAttribute('content', currentConfig.metaDescription);
 
-            // Text
             const setTxt = (id, txt) => { const el = document.getElementById(id); if(el) el.innerText = txt || ""; };
             setTxt('header-site-name', currentConfig.siteName);
             setTxt('header-tagline', currentConfig.tagline);
@@ -665,7 +781,6 @@ applchu wuz here
             const foot = document.getElementById('footer-text');
             if (foot) foot.innerHTML = "&copy; " + currentConfig.copyright;
     
-            // CSS Variables
             const r = document.documentElement.style;
             const c = currentConfig.colors;
             const setVar = (n, v) => r.setProperty(n, v);
@@ -675,7 +790,6 @@ applchu wuz here
             setVar('--dislike-color', c.dislike); setVar('--like-btn-color', c.likeBtn); setVar('--dislike-btn-color', c.dislikeBtn);
             setVar('--widget-padding', currentConfig.widgetPadding);
             
-            // Images
             if(currentConfig.bgImage && currentConfig.bgImage.length > 5) setVar('--bg-image', `url('${currentConfig.bgImage}')`);
             else setVar('--bg-image', 'none');
     
@@ -690,7 +804,6 @@ applchu wuz here
                 else headerEl.style.backgroundImage = 'none';
             }
     
-            // Custom CSS
             let customStyle = document.getElementById('custom-css-block');
             if (!customStyle) { customStyle = document.createElement('style'); customStyle.id = 'custom-css-block'; document.head.appendChild(customStyle); }
             customStyle.textContent = currentConfig.customCss || '';
@@ -711,7 +824,7 @@ applchu wuz here
                 document.getElementById('admin-dashboard').style.display = 'block';
                 passEl.value = '';
                 populateAdminFields();
-                renderLeaflets(); // Re-render to show delete buttons
+                renderLeaflets(); 
             } else {
                 showToast("Incorrect Password", "error");
             }
@@ -757,11 +870,21 @@ applchu wuz here
             
             const newPost = { id: Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '), content: content, media: media };
             
-            if (currentUploadFile) {
+            // CHECK LOCAL MODE
+            const isLocal = window.location.protocol === 'file:' && !globalApiKey;
+
+            if (currentUploadFile && !isLocal) {
+                // Upload Path: With Media (Networked)
                 pendingPost = newPost;
                 uploadToBridge('media_only', currentUploadFile, media);
             } else {
+                // Upload Path: Text Only OR Local Media
                 postsCache.push(newPost);
+                
+                if (currentUploadFile && isLocal) {
+                     alert("Local Mode: You must manually move '" + currentUploadFile.name + "' to your site's 'img/' folder.");
+                }
+
                 saveSystem(); 
                 clearPostInputs();
                 renderLeaflets();
@@ -854,7 +977,6 @@ applchu wuz here
             const ints = interactionsCache[postId] || { comments: [] };
             const comments = ints.comments || [];
             
-            // Re-construct post display logic for lightbox
             let mediaHtml = '';
             if (post.media) {
                 const type = getMediaType(post.media);
@@ -927,22 +1049,10 @@ applchu wuz here
         }
         
         function downloadStaticIndex() {
-            // Apply current config to DOM, serialize, and download
             applyVisualConfig();
-            // Remove bridge frame and scripts before export
             const clone = document.documentElement.cloneNode(true);
-            const scripts = clone.querySelectorAll('script');
-            // We want to keep the main logic, but maybe we want to strip the system.js loaders? 
-            // For now, raw dump is fine as it allows the user to re-upload easily.
             const html = "<!DOCTYPE html>\n" + clone.outerHTML;
             downloadFile(html, "index.html");
-        }
-
-        function downloadFile(content, name) {
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
-            link.download = name;
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
 
         // --- HELPER WRAPPERS ---
@@ -950,13 +1060,7 @@ applchu wuz here
         function hideUploadModal() { const m = document.getElementById('upload-modal'); if(m) m.style.display='none'; document.getElementById('upload-progress-bar').style.width='0%'; }
         function showUploadModal(txt) { document.getElementById('upload-modal').style.display='flex'; document.getElementById('upload-status-text').innerText=txt; document.getElementById('upload-error-log').style.display='none'; document.getElementById('upload-close-btn').style.display='none'; }
         function handleUploadError(msg) { document.getElementById('upload-status-text').innerText="FAILED"; document.getElementById('upload-status-text').style.color="#ff7675"; document.getElementById('upload-error-log').innerText=msg; document.getElementById('upload-error-log').style.display='block'; document.getElementById('upload-close-btn').style.display='inline-block'; }
-        function showToast(msg, type='info') {
-            const t = document.createElement('div'); t.className=`toast ${type}`; 
-            t.innerHTML = type==='loading'?`<div class="toast-spinner"></div><span>${msg}</span>`:`<span>${msg}</span>`;
-            document.getElementById('toast-container').appendChild(t);
-            if(type==='loading') currentLoadingToast = t;
-            else setTimeout(() => { t.style.animation='fadeOut 0.5s forwards'; setTimeout(()=>t.remove(),500); }, 3000);
-        }
+        
         function updateSyncStatus(s,t) { const d=document.getElementById('sync-dot'); if(d) d.className='sync-indicator '+s; const tx=document.getElementById('sync-text'); if(tx) tx.innerText=t; }
         function markUnsynced() { updateSyncStatus('unsynced', 'Unsaved Changes'); }
         function handleFileSelect() { const f = document.getElementById('file-selector').files[0]; if(f) { currentUploadFile=f; document.getElementById('admin-media').value='img/'+f.name; document.getElementById('upload-file-info').innerText="Selected: "+f.name; document.getElementById('upload-file-info').style.display='inline-block'; } }
@@ -966,23 +1070,10 @@ applchu wuz here
         function switchTab(t) { document.querySelectorAll('.view-section').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(e=>e.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); if(t==='leaflets') document.getElementById('nav-leaflets-btn').classList.add('active'); if(t==='admin') document.getElementById('admin-tab-btn').classList.add('active'); }
         function switchAdminSubTab(t) { document.getElementById('admin-sub-post').style.display='none'; document.getElementById('admin-sub-settings').style.display='none'; document.getElementById('admin-sub-'+t).style.display='block'; }
         
-        // --- MEDIA VIEWER & NAVIGATION ---
         function openMediaViewer(url, type) { 
-            // 1. Build Media List from Posts Cache
-            currentMediaList = [...postsCache]
-                .sort((a,b) => b.id - a.id)
-                .filter(p => p.media)
-                .map(p => ({ url: p.media, type: getMediaType(p.media) }));
-            
-            // 2. Find Index
+            currentMediaList = [...postsCache].sort((a,b) => b.id - a.id).filter(p => p.media).map(p => ({ url: p.media, type: getMediaType(p.media) }));
             currentMediaIndex = currentMediaList.findIndex(m => m.url === url);
-            
-            // 3. Fallback if media is strictly local or new
-            if(currentMediaIndex === -1) {
-                currentMediaList = [{url, type}];
-                currentMediaIndex = 0;
-            }
-
+            if(currentMediaIndex === -1) { currentMediaList = [{url, type}]; currentMediaIndex = 0; }
             renderMediaOverlay();
             document.getElementById('media-fullscreen-overlay').classList.add('active');
             document.body.classList.add('modal-open'); 
@@ -992,20 +1083,13 @@ applchu wuz here
             const item = currentMediaList[currentMediaIndex];
             if(!item) return;
             const w = document.getElementById('media-content-wrapper');
-            
-            // Generate Buttons
             const btn = (dir, lbl) => `<button class="media-nav" onclick="event.stopPropagation(); navigateMedia(${dir})">${lbl}</button>`;
-            
-            const content = item.type === 'video' 
-                ? `<video controls autoplay loop style="max-width:80vw;max-height:90vh;box-shadow:0 0 20px rgba(0,0,0,0.5);"><source src="${item.url}"></video>` 
-                : `<img src="${item.url}" style="max-width:80vw;max-height:90vh;box-shadow:0 0 20px rgba(0,0,0,0.5);">`;
-                
+            const content = item.type === 'video' ? `<video controls autoplay loop style="max-width:80vw;max-height:90vh;box-shadow:0 0 20px rgba(0,0,0,0.5);"><source src="${item.url}"></video>` : `<img src="${item.url}" style="max-width:80vw;max-height:90vh;box-shadow:0 0 20px rgba(0,0,0,0.5);">`;
             w.innerHTML = btn(-1, '&lt;') + content + btn(1, '&gt;');
         }
 
         function navigateMedia(dir) {
             currentMediaIndex += dir;
-            // Wrap around
             if(currentMediaIndex < 0) currentMediaIndex = currentMediaList.length - 1;
             if(currentMediaIndex >= currentMediaList.length) currentMediaIndex = 0;
             renderMediaOverlay();
@@ -1013,10 +1097,7 @@ applchu wuz here
 
         function closeMediaViewer() { 
             document.getElementById('media-fullscreen-overlay').classList.remove('active'); 
-            // Fix: Check variable existence before accessing to prevent ReferenceError
-            if(typeof currentLightboxPostId === 'undefined' || !currentLightboxPostId) {
-                document.body.classList.remove('modal-open'); 
-            }
+            if(!currentLightboxPostId) document.body.classList.remove('modal-open'); 
             const v=document.querySelector('.media-overlay video'); 
             if(v) v.pause(); 
         }
