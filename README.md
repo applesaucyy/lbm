@@ -2,6 +2,8 @@
 
 Welcome\! **LBM** is a little system that allows you to run a (somewhat) dynamic micro-blog (like Twitter, or a lil’ diary) on static hosting sites like [**Neocities**](https://neocities.org) without needing to know how to code.
 
+<img width="961" height="922" alt="image" src="https://github.com/user-attachments/assets/7f9d4ec4-008c-410c-9f11-590530395761" />
+
 ## **How it Works**
 
 Unlike normal static sites where you have to edit code to add posts, LBM is self-editing.
