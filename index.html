@@ -1,6 +1,6 @@
 <!--
 LBM (Leaflet Blog Manager)
-Version: 0.4
+Version: 0.5
 License: MIT
 applchu wuz here
 -->
@@ -11,125 +11,51 @@ applchu wuz here
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- Dynamic Metadata Placeholders -->
+    <!-- Metadata -->
     <title id="dynamic-title">LBM System</title>
     <meta id="dynamic-desc" name="description" content="A personal microblogging archive.">
+    <!-- RSS -->
+    <link id="dynamic-rss" rel="alternate" type="application/rss+xml" title="RSS Feed" href="rss.xml">
     
-    <!-- CSP Configuration -->
+    <!-- CSP -->
     <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; img-src * data: blob:; media-src * data: blob:; connect-src * 'unsafe-inline';">
     
-    <!-- Libraries -->
+    <!-- Dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="style.css">
     
     <style>
-        /* --- UI UTILITIES --- */
-        .delete-btn { background: none; border: none; color: var(--dislike-color); cursor: pointer; font-size: 14px; font-weight: bold; opacity: 0.7; margin-left: auto; }
-        .delete-btn:hover { opacity: 1; text-decoration: underline; }
-        
         #bridge-frame { width: 1px; height: 1px; opacity: 0; position: absolute; pointer-events: none; }
         
-        /* --- SYNC STATUS --- */
-        .sync-status { padding: 10px; margin-bottom: 15px; border: 1px dashed #666; background: #222; font-size: 12px; display: flex; align-items: center; gap: 10px; }
-        .sync-indicator { width: 10px; height: 10px; border-radius: 50%; background: #555; }
-        .sync-indicator.synced { background: #76c7c0; box-shadow: 0 0 5px #76c7c0; }
-        .sync-indicator.unsynced { background: #ff7675; }
-        .sync-indicator.loading { background: #ffeaa7; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.5; } }
-
-        /* --- TOAST NOTIFICATIONS --- */
-        #toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10000; pointer-events: none; }
-        .toast { background: #222; border: 1px solid var(--border-color); border-left: 3px solid var(--accent-color); padding: 12px 16px; border-radius: 4px; display: flex; align-items: center; gap: 10px; color: var(--text-color); font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); pointer-events: auto; min-width: 200px; }
-        .toast.success { border-left-color: #76c7c0; }
-        .toast.error { border-left-color: #ff7675; }
-        .toast.loading { border-left-color: #ffeaa7; }
-        .toast-spinner { width: 12px; height: 12px; border: 2px solid #555; border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite; }
-        
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        @keyframes fadeOut { to { opacity: 0; transform: translateY(10px); } }
-
-        /* --- POST HIGHLIGHT (PERMALINK) --- */
-        .highlight-post {
-            animation: highlightFade 2s ease-out;
-            border: 1px solid var(--accent-color);
-        }
-        @keyframes highlightFade {
-            0% { box-shadow: 0 0 15px var(--accent-color); }
-            100% { box-shadow: none; }
-        }
-
-        /* --- MODALS --- */
-        #upload-modal, #repair-modal { display: none; position: fixed; z-index: 10001; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; backdrop-filter: blur(5px); }
-        #repair-modal { z-index: 10002; background: rgba(0,0,0,0.9); }
-        
-        .upload-box { background: var(--background-color); border: 1px solid var(--accent-color); padding: 30px; width: 320px; text-align: center; border-radius: 8px; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
-        .progress-container { width: 100%; background: #444; height: 8px; border-radius: 4px; margin-top: 20px; overflow: hidden; position: relative; }
-        .progress-fill { height: 100%; background: var(--accent-color); width: 0%; transition: width 0.3s ease-in-out; box-shadow: 0 0 10px var(--accent-color); }
-        .progress-indeterminate { position: absolute; top: 0; left: 0; bottom: 0; right: 0; background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 40px 40px; animation: progress-stripe 1s linear infinite; width: 100%; }
-        @keyframes progress-stripe { 0% { background-position: 40px 0; } 100% { background-position: 0 0; } }
-        .error-details { margin-top: 10px; font-size: 10px; color: #ff7675; background: #222; padding: 5px; border: 1px solid #444; max-height: 100px; overflow-y: auto; display: none; text-align: left; word-break: break-all; }
-
-        /* --- MEDIA VIEWER --- */
-        #media-content-wrapper { display: flex; align-items: center; justify-content: center; gap: 20px; width: 100%; height: 100%; }
-        .media-nav { background: rgba(0,0,0,0.5); color: #fff; border: 1px solid #777; font-size: 20px; padding: 10px 15px; cursor: pointer; border-radius: 50%; transition: 0.2s; user-select: none; pointer-events: auto; }
-        .media-nav:hover { background: var(--accent-color); border-color: var(--accent-color); color: #000; }
-        .media-nav:active { transform: scale(0.95); }
-
-        /* Mobile Adjustments */
-        @media (max-width: 768px) {
-            #media-content-wrapper {
-                position: relative;
-                gap: 0;
-            }
-            .media-nav {
-                position: absolute;
-                top: 50%;
-                transform: translateY(-50%);
-                z-index: 100;
-                background: rgba(0,0,0,0.6);
-                border: none;
-                border-radius: 5px;
-                padding: 15px 10px;
-            }
-            .media-nav:first-child { left: 5px; } /* Prev button */
-            .media-nav:last-child { right: 5px; } /* Next button */
-            
-            #media-content-wrapper img, 
-            #media-content-wrapper video {
-                max-width: 100%;
-                max-height: 80vh;
-                width: auto;
-                height: auto;
-            }
-        }
+        /* Post Highlight Animation */
+        .highlight-post { animation: highlightFade 2s ease-out; border: 1px solid var(--accent-color); }
+        @keyframes highlightFade { 0% { box-shadow: 0 0 15px var(--accent-color); } 100% { box-shadow: none; } }
     </style>
 </head>
 
 <body>
 
-    <!-- Toast Container -->
+    <!-- Notifications -->
     <div id="toast-container"></div>
 
-    <!-- Upload Progress Modal -->
+    <!-- Upload Modal -->
     <div id="upload-modal">
         <div class="upload-box">
-            <h3 style="color:var(--accent-color); margin-bottom:10px;">SYSTEM SYNC</h3>
-            <p id="upload-status-text" style="color:#aaa; font-size:12px;">Initiating upload sequence...</p>
+            <h3 style="color:var(--accent-color); margin-bottom:10px; font-family: var(--font-display); letter-spacing: 2px;">SYSTEM SYNC</h3>
+            <p id="upload-status-text" style="color:#aaa; font-size:12px; font-family: var(--font-mono);">Initiating upload sequence...</p>
             <div class="progress-container">
                 <div id="upload-progress-bar" class="progress-fill"></div>
-                <div class="progress-indeterminate"></div>
             </div>
             <div id="upload-error-log" class="error-details"></div>
             <button id="upload-close-btn" class="action-btn" style="margin-top:15px; display:none;" onclick="hideUploadModal()">Close</button>
         </div>
     </div>
 
-    <!-- Repair Modal -->
+    <!-- Token Repair Modal -->
     <div id="repair-modal">
         <div class="upload-box">
-            <h3 style="color:#ff7675; margin-bottom:10px;">CONNECTION REPAIR</h3>
-            <p style="color:#aaa; font-size:12px; margin-bottom:15px;">Your Secure Token was rejected by the server. Please re-authenticate.</p>
+            <h3 style="color:var(--dislike-color); margin-bottom:10px; font-family: var(--font-display);">CONNECTION REPAIR</h3>
+            <p style="color:#aaa; font-size:12px; margin-bottom:15px; font-family: var(--font-mono);">Your Secure Token was rejected. Please re-authenticate.</p>
             <form onsubmit="runRepair(); return false;">
                 <input type="text" name="username" autocomplete="username" style="display:none;">
                 <input type="password" id="repair-api-key" class="setup-input" placeholder="Neocities API Key" style="margin-bottom:15px;" autocomplete="new-password">
@@ -143,17 +69,17 @@ applchu wuz here
     <div id="setup-overlay" style="display:none;">
         <div class="setup-box">
             <h1 style="color:var(--accent-color); margin-bottom:20px; text-align:center;">SYSTEM BOOT // INITIAL SETUP</h1>
-            <h3 style="border-bottom:1px dotted #555; margin-bottom:10px;">1. System Configuration</h3>
-            <p style="font-size:11px; color:#aaa; margin-bottom:10px;">Create credentials. These will be encrypted into a Secure Token.</p>
+            <h3 style="margin-bottom:10px;">1. System Configuration</h3>
+            <p style="font-size:11px; color:#aaa; margin-bottom:10px; font-family: var(--font-mono);">Create credentials. These will be encrypted into a Secure Token.</p>
             <form onsubmit="return false;">
                 <input type="text" name="username" autocomplete="username" style="display:none;">
-                <label style="font-size:11px; color:#aaa; margin-top:10px;">Create Admin Password:</label>
+                <label style="font-size:11px; color:#aaa; margin-top:10px; font-family: var(--font-mono);">Create Admin Password:</label>
                 <input type="password" id="setup-password" class="setup-input" placeholder="Password" autocomplete="new-password">
-                <label style="font-size:11px; color:#aaa; margin-top:10px; display:block;">Neocities API Key:</label>
+                <label style="font-size:11px; color:#aaa; margin-top:10px; display:block; font-family: var(--font-mono);">Neocities API Key:</label>
                 <input type="password" id="setup-neocities-key" class="setup-input" placeholder="API Key (Will be encrypted)" autocomplete="off">
             </form>
 
-            <h3 style="border-bottom:1px dotted #555; margin: 20px 0 10px 0;">2. Branding</h3>
+            <h3 style="margin: 20px 0 10px 0;">2. Branding</h3>
             <div class="config-grid">
                 <div class="config-item"><label>Site Name</label><input type="text" id="setup-site-name" class="setup-input" value="LBM // System" oninput="updateSetupPreview()"></div>
                 <div class="config-item"><label>Tagline</label><input type="text" id="setup-tagline" class="setup-input" value="Personal Archive" oninput="updateSetupPreview()"></div>
@@ -163,18 +89,18 @@ applchu wuz here
             <div class="config-item" style="margin-bottom:10px;"><label>Profile Picture URL</label><input type="text" id="setup-pfp-image" class="setup-input" placeholder="https://..." oninput="updateSetupPreview()"></div>
             <div class="config-item" style="margin-bottom:10px;"><label>Header Banner URL</label><input type="text" id="setup-banner-image" class="setup-input" placeholder="https://..." oninput="updateSetupPreview()"></div>
 
-            <h3 style="border-bottom:1px dotted #555; margin: 20px 0 10px 0;">3. Theme</h3>
+            <h3 style="margin: 20px 0 10px 0;">3. Theme</h3>
             <div class="config-grid">
-                <div class="config-item"><label>Background</label><input type="color" id="col-bg" class="color-picker" value="#2B2B2B" oninput="updateSetupPreview()"></div>
-                <div class="config-item"><label>Text</label><input type="color" id="col-text" class="color-picker" value="#F0FFF0" oninput="updateSetupPreview()"></div>
-                <div class="config-item"><label>Sidebar/Footer</label><input type="color" id="col-sidebar" class="color-picker" value="#3B3B3B" oninput="updateSetupPreview()"></div>
-                <div class="config-item"><label>Accent</label><input type="color" id="col-accent" class="color-picker" value="#76c7c0" oninput="updateSetupPreview()"></div>
-                <div class="config-item"><label>Post Bg</label><input type="color" id="col-leaflet" class="color-picker" value="#353535" oninput="updateSetupPreview()"></div>
-                <div class="config-item"><label>Borders</label><input type="color" id="col-border" class="color-picker" value="#555555" oninput="updateSetupPreview()"></div>
-                <div class="config-item"><label>Active Nav</label><input type="color" id="col-nav-active" class="color-picker" value="#FFFFFF" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Background</label><input type="color" id="col-bg" class="color-picker" value="#010101" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Text</label><input type="color" id="col-text" class="color-picker" value="#e0f2f1" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Sidebar/Footer</label><input type="color" id="col-sidebar" class="color-picker" value="#0a0a0a" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Accent</label><input type="color" id="col-accent" class="color-picker" value="#ff6b35" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Post Bg</label><input type="color" id="col-leaflet" class="color-picker" value="#0a0a0a" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Borders</label><input type="color" id="col-border" class="color-picker" value="#1f2937" oninput="updateSetupPreview()"></div>
+                <div class="config-item"><label>Active Nav</label><input type="color" id="col-nav-active" class="color-picker" value="#c8ff00" oninput="updateSetupPreview()"></div>
             </div>
 
-            <h4 style="margin: 10px 0 5px 0; color: #aaa; border-bottom: 1px dotted #555;">Interaction Settings</h4>
+            <h4 style="margin: 10px 0 5px 0; color: #aaa; border-bottom: 1px dotted #555; font-family: var(--font-mono);">Interaction Settings</h4>
             <div class="config-grid">
                 <div class="config-item">
                     <label>Enable Reactions?</label>
@@ -202,26 +128,26 @@ applchu wuz here
             </div>
             <div class="config-grid">
                 <div class="config-item">
-                    <label>Like Meter Color</label>
-                    <input type="color" id="col-like" class="color-picker" value="#76c7c0" oninput="updateSetupPreview()">
+                    <label>Like Color</label>
+                    <input type="color" id="col-like" class="color-picker" value="#c8ff00" oninput="updateSetupPreview()">
                 </div>
                 <div class="config-item">
-                    <label>Dislike Meter Color</label>
-                    <input type="color" id="col-dislike" class="color-picker" value="#ff7675" oninput="updateSetupPreview()">
+                    <label>Dislike Color</label>
+                    <input type="color" id="col-dislike" class="color-picker" value="#ff3c8e" oninput="updateSetupPreview()">
                 </div>
                 <div class="config-item">
                     <label>Like Button Text</label>
-                    <input type="color" id="col-like-btn" class="color-picker" value="#F0FFF0" oninput="updateSetupPreview()">
+                    <input type="color" id="col-like-btn" class="color-picker" value="#010101" oninput="updateSetupPreview()">
                 </div>
                 <div class="config-item">
                     <label>Dislike Button Text</label>
-                    <input type="color" id="col-dislike-btn" class="color-picker" value="#F0FFF0" oninput="updateSetupPreview()">
+                    <input type="color" id="col-dislike-btn" class="color-picker" value="#010101" oninput="updateSetupPreview()">
                 </div>
             </div>
 
             <div class="config-item" style="margin-bottom:10px;">
                 <label>Widget Padding</label>
-                <input type="text" id="setup-widget-padding" class="setup-input" value="10px" oninput="updateSetupPreview()">
+                <input type="text" id="setup-widget-padding" class="setup-input" value="1.5rem" oninput="updateSetupPreview()">
             </div>
 
             <div class="config-item" style="margin-bottom:10px;">
@@ -246,12 +172,42 @@ applchu wuz here
         </div>
     </div>
 
-    <!-- Main Container -->
+    <!-- Edit Modal -->
+    <div id="edit-overlay" style="display:none;">
+        <div class="setup-box">
+            <h1 style="color:var(--accent-color); margin-bottom:20px; text-align:center;">EDIT LEAFLET</h1>
+            
+            <textarea id="edit-post-content" rows="6" placeholder="Content (HTML & Markdown supported)" class="setup-input"></textarea>
+            
+            <label style="font-size:11px; color:#aaa; margin-top:5px; font-family: var(--font-mono);">Media Path(s) (Comma separated for multiple)</label>
+            <input type="text" id="edit-post-media" placeholder="img/photo1.jpg, img/photo2.jpg" class="setup-input">
+            
+            <label style="font-size:11px; color:#aaa; margin-top:5px; font-family: var(--font-mono);">Tags</label>
+            <input type="text" id="edit-post-tags" placeholder="art, news" class="setup-input">
+            
+            <div class="form-group" style="margin: 15px 0;">
+                <input type="checkbox" id="edit-post-pin" style="vertical-align: middle;">
+                <label for="edit-post-pin" style="color:#aaa; font-size:12px; font-family: var(--font-mono); vertical-align: middle; margin-left: 5px;">Pin to Top</label>
+            </div>
+            
+            <input type="hidden" id="edit-post-id">
+            
+            <div style="display:flex; gap:10px;">
+                <button class="action-btn" onclick="submitEditedPost()">Save Changes</button>
+                <button class="action-btn" onclick="closeEditModal()" style="background:var(--dislike-color);">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layout -->
     <div class="container">
         <header id="site-header-block">
             <div class="header-overlay">
                 <div class="header-row">
                     <div class="header-identity">
+                        <!-- Navigation Toggle -->
+                        <button id="hamburger-btn" onclick="toggleMobileMenu()">&#9776;</button>
+                        
                         <img id="header-pfp" class="site-pfp" alt="PFP">
                         <div class="header-titles">
                             <h1 id="header-site-name">Loading...</h1>
@@ -263,32 +219,79 @@ applchu wuz here
             </div>
         </header>
 
+        <!-- Marquee -->
+        <div class="marquee-container">
+            <div class="marquee" id="marquee-content">
+                <!-- Add your own scrolling text here -->
+                <span>LEAFLET</span>
+                <span>BLOG</span>
+                <span>MANAGER</span>
+                <span>LEAFLET</span>
+                <span>BLOG</span>
+                <span>MANAGER</span>
+                <span>LEAFLET</span>
+                <span>BLOG</span>
+                <span>MANAGER</span>
+                <span>LEAFLET</span>
+                <span>BLOG</span>
+                <span>MANAGER</span>
+            </div>
+        </div>
+
         <div class="layout-wrapper">
-            <nav class="sidebar">
+            <!-- Sidebar -->
+            <nav class="sidebar" id="main-sidebar">
+                <button id="mobile-close-btn" onclick="toggleMobileMenu()">&times; Close</button>
+
                 <button class="nav-btn active" onclick="switchTab('leaflets')" id="nav-leaflets-btn">Leaflets</button>
                 <button class="nav-btn" onclick="switchTab('gallery')">Gallery</button>
+                
+                <!-- Tag Cloud -->
+                <div id="tag-cloud-container">
+                    <!-- Tags will appear here -->
+                </div>
+                
                 <div style="height: 10px;"></div>
-                <button class="nav-btn" id="admin-tab-btn" onclick="switchTab('admin')" style="color: #888; border-color: #444;">Login</button>
+                <button class="nav-btn" id="admin-tab-btn" onclick="switchTab('admin')" style="color: var(--gray); border-color: transparent;">Login</button>
+				<a href="rss.xml" class="nav-btn" target="_blank" style="color: var(--accent-color); border-color: transparent; text-decoration: none; display: block; margin-top: 5px;">
+                    ⬇ RSS Feed
+                </a>
             </nav>
+            
+            <!-- Mobile Overlay for Sidebar -->
+            <div id="sidebar-overlay" onclick="toggleMobileMenu()"></div>
 
             <main>
-                <!-- Feed -->
+                <!-- Feed Tab -->
                 <section id="tab-leaflets" class="view-section active">
-                    <h2 id="header-leaflets-title">Recent Updates</h2>
+                    <div class="feed-header">
+                        <h2 id="header-leaflets-title">Recent Updates</h2>
+                        <button id="clear-filter-btn" class="action-btn" style="display:none; width:auto; padding: 5px 10px; font-size: 0.7rem;" onclick="clearFilters()">Clear Filter</button>
+                    </div>
+                    <!-- Search Box -->
+                    <div class="search-box">
+                        <input type="text" id="search-input" placeholder="//search..." oninput="handleSearch(this.value)">
+                        <select id="sort-filter" onchange="renderLeaflets()" class="sort-dropdown">
+                            <option value="newest">Newest</option>
+                            <option value="oldest">Oldest</option>
+                            <option value="popular">Popular (Likes)</option>
+                            <option value="controversial">Controversial (Dislikes)</option>
+                        </select>
+                    </div>
                     <div id="leaflets-container">Loading content...</div>
                 </section>
 
-                <!-- Gallery -->
+                <!-- Gallery Tab -->
                 <section id="tab-gallery" class="view-section">
                     <h2>Image Gallery</h2>
                     <div id="gallery-container" class="gallery-grid">Loading...</div>
                 </section>
 
-                <!-- Admin -->
+                <!-- Admin Tab -->
                 <section id="tab-admin" class="view-section">
                     <h2>Admin // Login</h2>
                     <div id="admin-login-form" class="admin-panel">
-                        <p style="margin-bottom:15px; color:#aaa;">Enter your admin password.</p>
+                        <p style="margin-bottom:15px; color:#aaa; font-family: var(--font-mono);">Enter your admin password.</p>
                         <form onsubmit="adminLogin(); return false;">
                             <input type="text" name="username" autocomplete="username" style="display:none;">
                             <input type="password" id="login-pass" class="setup-input" placeholder="Password" style="margin-bottom:10px;" autocomplete="current-password">
@@ -304,35 +307,44 @@ applchu wuz here
                                 <button onclick="forceSyncAll()" class="reaction-btn" style="color:var(--accent-color); border-color:var(--accent-color);">FORCE SYNC</button>
                                 <button onclick="downloadBackup()" class="reaction-btn" title="Download Backup">⬇ JS</button>
                                 <button onclick="downloadStaticIndex()" class="reaction-btn" title="Download Static HTML for SEO" style="border-color:#aaa;">⬇ HTML</button>
+                                <button onclick="downloadRSS()" class="reaction-btn" title="Download RSS Feed" style="border-color:#ff9f43; color:#ff9f43;">⬇ RSS</button>
                             </div>
                         </div>
 
                         <div style="display:flex; gap:10px; margin-bottom:15px;">
                             <button class="action-btn" onclick="switchAdminSubTab('post')" style="flex:1;">New Post</button>
-                            <button class="action-btn" onclick="switchAdminSubTab('settings')" style="flex:1; background:#444;">Site Settings</button>
-                            <button class="action-btn" onclick="location.reload()" style="flex:0; background:#ff7675;">Logout</button>
+                            <button class="action-btn" onclick="switchAdminSubTab('settings')" style="flex:1; background:var(--bg-dark); color: var(--text-color);">Site Settings</button>
+                            <button class="action-btn" onclick="location.reload()" style="flex:0; background:var(--dislike-color);">Logout</button>
                         </div>
 
-                        <!-- Post Sub-Tab -->
+                        <!-- Post Editor -->
                         <div id="admin-sub-post" class="admin-panel">
                             <h3>Create New Content</h3>
                             <div class="form-group" style="margin-bottom: 15px;">
-                                <textarea id="admin-content" rows="4" placeholder="What's on your mind? (Markdown supported)" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #555;"></textarea>
+                                <textarea id="admin-content" rows="4" placeholder="What's on your mind? (Markdown & HTML supported)" class="setup-input"></textarea>
                             </div>
                             <div class="form-group" style="margin-bottom: 15px;">
-                                <label style="color:var(--accent-color); display:block; margin-bottom:5px;">Media Upload (Will upload to img/)</label>
-                                <div class="file-upload-wrapper">
-                                    <input type="file" id="file-selector" onchange="handleFileSelect()" accept="image/*,video/*">
+                                <label style="color:var(--accent-color); display:block; margin-bottom:5px; font-family: var(--font-mono); font-size: 0.7rem;">Media Upload (Will upload to img/)</label>
+                                <div class="file-upload-wrapper" style="font-family: var(--font-mono); font-size: 0.8rem;">
+                                    <input type="file" id="file-selector" onchange="handleFileSelect()" accept="image/*,video/*" multiple>
                                     <div id="upload-file-info" style="display:none; margin-left:10px; font-size:11px; color:var(--accent-color);"></div>
                                 </div>
                             </div>
                             <div class="form-group" style="margin-bottom: 15px;">
-                                <input type="text" id="admin-media" placeholder="Media Path (e.g. img/photo.jpg)" style="width:100%; padding:8px; background:#222; color:#fff; border:1px solid #555;">
+                                <input type="text" id="admin-media" placeholder="Media Path (e.g. img/photo.jpg or https://...)" class="setup-input">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <input type="text" id="admin-tags" placeholder="Tags (comma separated: art, news, daily)" class="setup-input">
+                            </div>
+                            <!-- Pin Toggle -->
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <input type="checkbox" id="admin-pin" style="vertical-align: middle;">
+                                <label for="admin-pin" style="color:#aaa; font-size:12px; font-family: var(--font-mono); vertical-align: middle; margin-left: 5px;">Pin to Top</label>
                             </div>
                             <button class="action-btn" onclick="addPost()">Post & Sync</button>
                         </div>
 
-                        <!-- Settings Sub-Tab -->
+                        <!-- Site Settings -->
                         <div id="admin-sub-settings" class="admin-panel" style="display:none;">
                             <h3>SEO & Metadata</h3>
                             <div class="config-grid">
@@ -362,6 +374,9 @@ applchu wuz here
                                 <div class="config-item"><label>Borders</label><input type="color" id="edit-col-border" class="color-picker" oninput="updateLivePreview()"></div>
                                 <div class="config-item"><label>Active Nav</label><input type="color" id="edit-col-nav-active" class="color-picker" oninput="updateLivePreview()"></div>
                             </div>
+                            
+                            <!-- Reset -->
+                            <button class="action-btn" style="background:var(--border-color); color:var(--text-color); margin-top:10px; margin-bottom:20px;" onclick="resetColors()">Reset Colors to Default</button>
 
                             <h4>Interaction Settings</h4>
                             <div class="config-grid">
@@ -400,7 +415,7 @@ applchu wuz here
                                 </select>
                             </div>
 
-                            <!-- Manual Key Update -->
+                            <!-- Token Rotation -->
                             <div class="config-item" style="margin-bottom:15px; border-top:1px dotted #555; padding-top:15px;">
                                 <label>Update API Key (Optional)</label>
                                 <form onsubmit="return false;">
@@ -426,12 +441,12 @@ applchu wuz here
     </div>
 
     <footer>
-        <div id="footer-text" style="text-align: center; margin-top: 30px; border-top: 1px dotted var(--border-color); padding: 10px; color: #666;">
+        <div id="footer-text">
             &copy; 2025 LBM
         </div>
     </footer>
 
-    <!-- Overlays -->
+    <!-- Lightbox -->
     <div id="leaflet-lightbox" class="lightbox" onclick="if(event.target === this) closeLightbox()">
         <div class="lightbox-content">
             <span class="close-btn" onclick="closeLightbox()">&times;</span>
@@ -439,18 +454,28 @@ applchu wuz here
         </div>
     </div>
 
+    <!-- Media Viewer -->
     <div id="media-fullscreen-overlay" class="media-overlay" onclick="closeMediaViewer()">
         <span class="close-media-btn" onclick="closeMediaViewer()">&times;</span>
         <div id="media-content-wrapper" onclick="event.stopPropagation()"></div>
     </div>
 
-    <!-- MAIN SYSTEM LOGIC -->
+    <!-- Application Logic -->
     <script>
-        // --- CONSTANTS ---
+        // Constants
         const FIXED_BRIDGE_URL = "https://applchu.link/lbm/0.4/bridge.html?v=" + new Date().getTime();
         const LOCAL_STORAGE_KEY = "LBM_CONFIG_CACHE";
+        const LOCAL_REACTIONS_KEY = "LBM_USER_REACTIONS";
         
-        // --- UTILITIES ---
+        // Theme Defaults
+        const DEFAULT_THEME_COLORS = {
+            bg: "#010101", text: "#e0f2f1", sidebar: "#0a0a0a", accent: "#ff6b35",
+            leaflet: "#0a0a0a", border: "#1f2937", navActive: "#c8ff00",
+            like: "#c8ff00", dislike: "#ff3c8e",
+            likeBtn: "#010101", dislikeBtn: "#010101"
+        };
+        
+        // Utilities
         function unicodeToBase64(str) { return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1))); }
         function base64ToUnicode(str) { return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')); }
         async function sha256(message) {
@@ -488,10 +513,10 @@ applchu wuz here
             });
         }
 
-        // --- STATE ---
+        // State Management
         let postsCache = []; 
         let interactionsCache = {}; 
-        let currentUploadFile = null;
+        let currentUploadFiles = []; 
         let globalAdminHash = null;
         let globalAuthToken = null; 
         let globalApiKey = null;
@@ -503,6 +528,15 @@ applchu wuz here
         let currentLightboxPostId = null; 
         let currentMediaList = [];
         let currentMediaIndex = 0;
+
+        // Upload State
+        let isBatchUploading = false;
+        let currentBatchResolve = null;
+        let currentBatchReject = null;
+
+        // Filter State
+        let activeTagFilter = null;
+        let activeSearchQuery = "";
         
         let currentConfig = {
             siteName: "LBM // System",
@@ -520,17 +554,25 @@ applchu wuz here
             reactionIcon: "face",
             likeLabel: "(＾∇＾)",
             dislikeLabel: "(；へ：)",
-            widgetPadding: "10px",
-            colors: {
-                bg: "#2B2B2B", text: "#F0FFF0", sidebar: "#3B3B3B", accent: "#76c7c0",
-                leaflet: "#353535", border: "#555555", navActive: "#FFFFFF",
-                like: "#76c7c0", dislike: "#ff7675",
-                likeBtn: "#F0FFF0", dislikeBtn: "#F0FFF0"
-            }
+            widgetPadding: "1.5rem",
+            colors: { ...DEFAULT_THEME_COLORS }
         };
 
-        // --- INITIALIZATION ---
+        // Initialization
         window.onload = async function() {
+            if (typeof marked !== 'undefined') {
+                marked.setOptions({
+                    breaks: true,
+                    gfm: true
+                });
+            }
+
+            // Marquee Content Duplication
+            const marquee = document.getElementById('marquee-content');
+            if(marquee) {
+                marquee.innerHTML += marquee.innerHTML;
+            }
+
             loadFromLocalCache();
             window.addEventListener('message', handleBridgeMessage);
             
@@ -600,10 +642,15 @@ applchu wuz here
                     applyVisualConfig();
                     renderLeaflets();
                     renderGallery();
+                    renderTagCloud();
                     
                     // Permalink Handler
                     if(window.location.hash) {
                         const id = window.location.hash.substring(1);
+                        const numericId = parseInt(id);
+                        if (!isNaN(numericId)) {
+                             openLightbox(numericId);
+                        }
                         const el = document.getElementById(id);
                         if(el) {
                             setTimeout(() => {
@@ -623,7 +670,7 @@ applchu wuz here
             }
         }
 
-        // --- BRIDGE HANDLER ---
+        // Bridge Communication
         let tokenizeResolve = null; 
         
         function handleBridgeMessage(e) {
@@ -638,22 +685,21 @@ applchu wuz here
             }
 
             if(e.data.type === 'UPLOAD_RESULT') {
+                if (isBatchUploading) {
+                    if (e.data.success) {
+                        if (currentBatchResolve) currentBatchResolve(true);
+                    } else {
+                        if (currentBatchReject) currentBatchReject(e.data.message);
+                    }
+                    return; 
+                }
+
                 if (currentLoadingToast && currentLoadingToast.parentNode) currentLoadingToast.remove();
                 
                 if(e.data.success) {
-                    if (pendingPost) {
-                        showToast("Image Uploaded! Saving Post...", "loading");
-                        postsCache.push(pendingPost);
-                        pendingPost = null; 
-                        saveSystem();
-                        clearPostInputs();
-                        renderLeaflets();
-                        renderGallery();
-                    } else {
-                        hideUploadModal();
-                        showToast("Sync Successful!", "success");
-                        updateSyncStatus('synced', 'System Synced');
-                    }
+                    hideUploadModal();
+                    showToast("Sync Successful!", "success");
+                    updateSyncStatus('synced', 'System Synced');
                 } else {
                     if (e.data.message && (e.data.message.includes("Invalid or Corrupted Token") || e.data.message.includes("403") || e.data.message.includes("invalid credentials"))) {
                         hideUploadModal();
@@ -665,7 +711,7 @@ applchu wuz here
             }
         }
 
-        // --- REPAIR LOGIC ---
+        // Token Repair
         async function runRepair() {
             const k = document.getElementById('repair-api-key').value;
             if(!k) return alert("Please enter API Key");
@@ -678,7 +724,7 @@ applchu wuz here
                 globalAuthToken = newToken;
                 globalApiKey = null;
                 pendingPost = null; 
-                currentUploadFile = null;
+                currentUploadFiles = [];
                 
                 document.getElementById('repair-modal').style.display = 'none';
                 showToast("Repair Successful! Retrying Save...", "success");
@@ -691,7 +737,7 @@ applchu wuz here
             }
         }
 
-        // --- BRIDGE & SYNC ---
+        // Data Synchronization
         function injectBridge(url) {
             let frame = document.getElementById('bridge-frame');
             if(!frame) {
@@ -716,6 +762,10 @@ applchu wuz here
             }
 
             uploadToBridge('system', mediaFile, explicitMediaPath, overrideToken);
+
+            if(!mediaFile) {
+                setTimeout(() => uploadToBridge('rss', null, null, overrideToken), 3000);
+            }
         }
         
         async function saveInteractions() { 
@@ -727,6 +777,7 @@ applchu wuz here
             saveToLocalCache();
             uploadToBridge('system'); 
             setTimeout(() => uploadToBridge('interactions'), 2000); 
+            setTimeout(() => uploadToBridge('rss'), 4000); 
         }
 
         async function uploadToBridge(target, mediaFile = null, explicitMediaPath = null, overrideToken = null) {
@@ -740,7 +791,7 @@ applchu wuz here
 
             let passwordCheck = null;
             
-            if (target === 'system' || target === 'media_only') {
+            if (target === 'system' || target === 'media_only' || target === 'rss') {
                 if (!sessionPassword) {
                      sessionPassword = document.getElementById('login-pass').value;
                 }
@@ -765,6 +816,10 @@ applchu wuz here
                 fileContent = `window.AZUMINT_INTERACTIONS = "${encodedStr}";`;
                 fileName = "interactions.js";
                 showToast("Syncing Interactions...", "loading");
+            } else if (target === 'rss') {
+                fileContent = generateRSS();
+                fileName = "rss.xml";
+                showToast("Updating RSS Feed...", "loading");
             }
 
             if (mediaFile) {
@@ -772,7 +827,7 @@ applchu wuz here
                 mediaName = (rawName && rawName.indexOf('/') === -1) ? 'img/' + rawName : rawName;
             }
 
-            if (target === 'system' || target === 'media_only') {
+            if (!isBatchUploading && (target === 'system' || target === 'media_only')) {
                 showToast(mediaFile ? "Uploading Media..." : "Saving System...", "loading");
                 showUploadModal(mediaFile ? "Uploading Media..." : "Saving System...");
             }
@@ -793,7 +848,16 @@ applchu wuz here
             }
         }
 
-        // --- DATA PREPARATION ---
+        // Batch Upload Helper
+        function promisifiedUpload(mediaFile, path) {
+            return new Promise((resolve, reject) => {
+                currentBatchResolve = resolve;
+                currentBatchReject = reject;
+                uploadToBridge('media_only', mediaFile, path);
+            });
+        }
+
+        // Data Payload Construction
         async function prepareSystemData(mode, explicitToken = null) {
             let hashVar, tokenToSave = explicitToken || globalAuthToken;
 
@@ -857,7 +921,7 @@ applchu wuz here
             });
         }
 
-        // --- UI CONFIG SCRAPING ---
+        // UI Configuration Extraction
         function scrapeConfig(prefix) {
              const id = (name) => { const el = document.getElementById(prefix + '-' + name); return el ? el.value : ''; };
              const col = (name) => { const el = document.getElementById((prefix === 'edit' ? 'edit-col-' : 'col-') + name); return el ? el.value : '#000000'; };
@@ -942,12 +1006,33 @@ applchu wuz here
             let customStyle = document.getElementById('custom-css-block');
             if (!customStyle) { customStyle = document.createElement('style'); customStyle.id = 'custom-css-block'; document.head.appendChild(customStyle); }
             customStyle.textContent = currentConfig.customCss || '';
+
+            // Dynamic RSS Link Injection
+            let rssLink = document.getElementById('dynamic-rss');
+            if(!rssLink) {
+                rssLink = document.createElement('link');
+                rssLink.id = 'dynamic-rss';
+                rssLink.rel = 'alternate';
+                rssLink.type = 'application/rss+xml';
+                rssLink.title = 'RSS Feed';
+                rssLink.href = 'rss.xml';
+                document.head.appendChild(rssLink);
+            }
         }
         
         function updateSetupPreview() { scrapeConfig('setup'); applyVisualConfig(); }
         function updateLivePreview() { scrapeConfig('edit'); applyVisualConfig(); markUnsynced(); }
         
-        // --- ADMIN LOGIN ---
+        function resetColors() {
+            if(!confirm("Reset all colors to the default theme?")) return;
+            currentConfig.colors = { ...DEFAULT_THEME_COLORS }; 
+            populateAdminFields(); 
+            applyVisualConfig();   
+            markUnsynced();
+            showToast("Colors reset to default.", "success");
+        }
+
+        // Authentication
         async function adminLogin() {
             const passEl = document.getElementById('login-pass');
             if(!globalAdminHash) return showToast("Config missing.", "error");
@@ -1016,28 +1101,66 @@ applchu wuz here
             col('dislike-btn').value = currentConfig.colors.dislikeBtn;
         }
 
-        // --- CONTENT MANAGEMENT ---
-        function addPost() {
+        // Post Management
+        async function addPost() {
             const content = document.getElementById('admin-content').value;
-            const media = document.getElementById('admin-media').value;
+            const mediaInput = document.getElementById('admin-media').value;
+            const tagsInput = document.getElementById('admin-tags').value;
+            const pinned = document.getElementById('admin-pin').checked;
+            
             if (!content) return showToast("Content required", "error");
             
-            const newPost = { id: Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '), content: content, media: media };
-            
+            const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
             const isLocal = window.location.protocol === 'file:' && !globalAuthToken;
 
-            if (currentUploadFile && !isLocal) {
-                pendingPost = newPost;
-                uploadToBridge('media_only', currentUploadFile, media);
-            } else {
-                postsCache.push(newPost);
-                if (currentUploadFile && isLocal) {
-                     alert("Local Mode: You must manually move '" + currentUploadFile.name + "' to your site's 'img/' folder.");
+            // Batch File Processing
+            let finalMedia = [];
+            
+            if (currentUploadFiles && currentUploadFiles.length > 0 && !isLocal) {
+                showUploadModal("Initializing Batch Upload...");
+                isBatchUploading = true;
+                
+                try {
+                    for (let i = 0; i < currentUploadFiles.length; i++) {
+                        const file = currentUploadFiles[i];
+                        const count = i + 1;
+                        const total = currentUploadFiles.length;
+                        
+                        document.getElementById('upload-status-text').innerText = `Uploading image ${count}/${total}: ${file.name}`;
+                        
+                        const path = 'img/' + file.name;
+                        
+                        await promisifiedUpload(file, path);
+                        finalMedia.push(path);
+                    }
+                } catch(err) {
+                    handleUploadError("Batch Upload Failed: " + err);
+                    isBatchUploading = false;
+                    return; 
                 }
-                saveSystem(); 
-                clearPostInputs();
-                renderLeaflets();
+                
+                isBatchUploading = false; 
+            } else if (mediaInput) {
+                finalMedia = mediaInput.split(',').map(s => s.trim());
             }
+
+            let savedMedia = finalMedia.length > 0 ? finalMedia : ""; 
+            if(finalMedia.length === 1) savedMedia = finalMedia[0];
+
+            const newPost = { id: Date.now(), date: new Date().toISOString().slice(0, 16).replace('T', ' '), content: content, media: savedMedia, tags: tags, pinned: pinned };
+            
+            postsCache.push(newPost);
+            
+            if (currentUploadFiles.length > 0 && isLocal) {
+                 alert("Local Mode: You must manually move your files to 'img/' folder.");
+            }
+            
+            showUploadModal("Finalizing Post...");
+            saveSystem(); 
+            
+            clearPostInputs();
+            renderLeaflets();
+            renderTagCloud();
         }
 
         function deletePost(postId, event) {
@@ -1045,25 +1168,187 @@ applchu wuz here
             if (!confirm("Delete post?")) return;
             postsCache = postsCache.filter(p => p.id !== postId);
             renderLeaflets();
+            renderTagCloud();
             saveSystem(); 
         }
 
-        // --- RENDERING ---
+        function openEditModal(postId, event) {
+            if (event) event.stopPropagation();
+            const post = postsCache.find(p => p.id === postId);
+            if (!post) return;
+
+            document.getElementById('edit-post-id').value = post.id;
+            document.getElementById('edit-post-content').value = post.content;
+            
+            let mediaStr = "";
+            if(Array.isArray(post.media)) mediaStr = post.media.join(', ');
+            else mediaStr = post.media || '';
+            
+            document.getElementById('edit-post-media').value = mediaStr;
+            document.getElementById('edit-post-tags').value = (post.tags || []).join(', ');
+            document.getElementById('edit-post-pin').checked = post.pinned || false;
+
+            document.getElementById('edit-overlay').style.display = 'flex';
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-overlay').style.display = 'none';
+        }
+
+        function submitEditedPost() {
+            const id = parseInt(document.getElementById('edit-post-id').value);
+            const content = document.getElementById('edit-post-content').value;
+            const mediaInput = document.getElementById('edit-post-media').value;
+            const tagsInput = document.getElementById('edit-post-tags').value;
+            const pinned = document.getElementById('edit-post-pin').checked;
+
+            if (!content) return showToast("Content required", "error");
+
+            const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+            
+            let media = mediaInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            if(media.length === 0) media = "";
+            else if(media.length === 1) media = media[0];
+
+            const idx = postsCache.findIndex(p => p.id === id);
+            if (idx !== -1) {
+                postsCache[idx].content = content;
+                postsCache[idx].media = media;
+                postsCache[idx].tags = tags;
+                postsCache[idx].pinned = pinned;
+                
+                saveSystem();
+                closeEditModal();
+                renderLeaflets();
+                renderTagCloud();
+                showToast("Post updated.", "success");
+            }
+        }
+
+        function togglePin(postId, event) {
+            event.stopPropagation();
+            const post = postsCache.find(p => p.id === postId);
+            if(post) {
+                post.pinned = !post.pinned;
+                renderLeaflets();
+                saveSystem();
+            }
+        }
+
+        // Filter Logic
+        function handleSearch(val) {
+            activeSearchQuery = val.trim().toLowerCase();
+            renderLeaflets();
+        }
+
+        function filterByTag(tag) {
+            if (activeTagFilter === tag) {
+                activeTagFilter = null; 
+            } else {
+                activeTagFilter = tag;
+            }
+            renderLeaflets();
+            toggleMobileMenu(false); 
+        }
+
+        function clearFilters() {
+            activeTagFilter = null;
+            activeSearchQuery = "";
+            document.getElementById('search-input').value = "";
+            renderLeaflets();
+        }
+
+        function toggleMobileMenu(forceState) {
+            const sidebar = document.getElementById('main-sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            if (forceState === false) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('open');
+            } else {
+                sidebar.classList.toggle('open');
+                overlay.classList.toggle('open');
+            }
+        }
+
+        // Render Logic
         function renderLeaflets() {
             const container = document.getElementById('leaflets-container');
-            const posts = [...postsCache].sort((a,b) => b.id - a.id);
-            if(posts.length === 0) { container.innerHTML = `<p>No ${currentConfig.leafletsName} yet.</p>`; return; }
+            const title = document.getElementById('header-leaflets-title');
+            const clrBtn = document.getElementById('clear-filter-btn');
+            const sortMode = document.getElementById('sort-filter').value;
+
+            let posts = [...postsCache];
+
+            posts.sort((a, b) => {
+                if (sortMode === 'newest') return b.id - a.id;
+                if (sortMode === 'oldest') return a.id - b.id;
+                if (sortMode === 'popular') {
+                    const likesA = (interactionsCache[a.id]?.likes || 0);
+                    const likesB = (interactionsCache[b.id]?.likes || 0);
+                    return likesB - likesA;
+                }
+                if (sortMode === 'controversial') {
+                    const dislikesA = (interactionsCache[a.id]?.dislikes || 0);
+                    const dislikesB = (interactionsCache[b.id]?.dislikes || 0);
+                    return dislikesB - dislikesA;
+                }
+                return b.id - a.id;
+            });
+
+            posts.sort((a, b) => {
+                if (a.pinned && !b.pinned) return -1;
+                if (!a.pinned && b.pinned) return 1;
+                return 0; 
+            });
+
+            if (activeSearchQuery || activeTagFilter) {
+                posts = posts.filter(p => {
+                    const contentLower = p.content.toLowerCase();
+                    const matchesSearch = !activeSearchQuery || contentLower.includes(activeSearchQuery);
+                    
+                    const postTags = p.tags || [];
+                    const matchesTag = !activeTagFilter || postTags.includes(activeTagFilter);
+                    
+                    return matchesSearch && matchesTag;
+                });
+
+                let status = "Found";
+                if(activeTagFilter) status = `Tag: //${activeTagFilter}`;
+                if(activeSearchQuery) status += ` searching "${activeSearchQuery}"`;
+                title.innerText = status;
+                clrBtn.style.display = 'inline-block';
+            } else {
+                title.innerText = "Recent " + currentConfig.leafletsName;
+                clrBtn.style.display = 'none';
+            }
+
+            if(posts.length === 0) { container.innerHTML = `<p style="font-family:var(--font-mono); color:var(--gray);">No matching content.</p>`; return; }
             
+            let userReactions = {};
+            try {
+                userReactions = JSON.parse(localStorage.getItem(LOCAL_REACTIONS_KEY) || '{}');
+            } catch(e) {}
+
             container.innerHTML = posts.map(post => {
                 const ints = interactionsCache[post.id] || { likes: 0, dislikes: 0 };
                 const total = (ints.likes || 0) + (ints.dislikes || 0);
                 const ratio = total === 0 ? 50 : (ints.likes / total) * 100;
                 
+                // Multi-Image Display
                 let mediaHtml = '';
                 if (post.media) {
-                    const type = getMediaType(post.media);
-                    if (type === 'video') mediaHtml = `<div class="leaflet-media-container"><video controls loop muted playsinline onclick="event.stopPropagation(); openMediaViewer('${post.media}', 'video')"><source src="${post.media}" type="video/mp4"></video></div>`;
-                    else mediaHtml = `<div class="leaflet-media-container"><img src="${post.media}" alt="Media" onclick="event.stopPropagation(); openMediaViewer('${post.media}', 'image')" onerror="this.style.display='none'"></div>`;
+                    let mediaArray = Array.isArray(post.media) ? post.media : [post.media];
+                    if (mediaArray.length > 0) {
+                        const firstItem = mediaArray[0];
+                        const type = getMediaType(firstItem);
+                        const countBadge = mediaArray.length > 1 ? `<div class="media-count-badge">+${mediaArray.length - 1}</div>` : '';
+                        
+                        if (type === 'video') {
+                             mediaHtml = `<div class="leaflet-media-container"><video controls loop muted playsinline onclick="event.stopPropagation(); openMediaViewer('${firstItem}', 'video')"><source src="${firstItem}" type="video/mp4"></video>${countBadge}</div>`;
+                        } else {
+                             mediaHtml = `<div class="leaflet-media-container" onclick="event.stopPropagation(); openLightbox(${post.id})"><img src="${firstItem}" alt="Media" onerror="this.style.display='none'">${countBadge}</div>`;
+                        }
+                    }
                 }
                 
                 const contentHtml = typeof marked !== 'undefined' ? marked.parse(post.content) : post.content;
@@ -1075,46 +1360,129 @@ applchu wuz here
                     let [lTxt, dTxt] = [currentConfig.likeLabel || '(＾∇＾)', currentConfig.dislikeLabel || '(；へ：)'];
                     if(currentConfig.reactionIcon === 'thumb') [lTxt, dTxt] = ['👍', '👎'];
                     if(currentConfig.reactionIcon === 'arrow') [lTxt, dTxt] = ['▲', '▼'];
+                    
+                    const myAction = userReactions[post.id];
+                    const likeActive = myAction === 'like' ? 'active-reaction' : '';
+                    const dislikeActive = myAction === 'dislike' ? 'active-reaction' : '';
 
                     reactions = `
                     <div class="reaction-widget" onclick="event.stopPropagation()">
-                        <button class="reaction-btn like-btn" onclick="handleReaction(${post.id}, 'like')">${ints.likes || 0} ${lTxt}</button>
+                        <button class="reaction-btn like-btn ${likeActive}" onclick="handleReaction(${post.id}, 'like')">${ints.likes || 0} ${lTxt}</button>
                         <div class="reaction-bar"><div class="reaction-fill" style="width: ${ratio}%"></div></div>
-                        <button class="reaction-btn dislike-btn" onclick="handleReaction(${post.id}, 'dislike')">${dTxt} ${ints.dislikes || 0}</button>
+                        <button class="reaction-btn dislike-btn ${dislikeActive}" onclick="handleReaction(${post.id}, 'dislike')">${dTxt} ${ints.dislikes || 0}</button>
                     </div>`;
                 }
+                
+                const tagsHtml = (post.tags && post.tags.length > 0) 
+                    ? `<div style="margin-top:10px;">${post.tags.map(t => `<span class="tag-link" onclick="event.stopPropagation(); filterByTag('${t}')">//${t}</span>`).join(' ')}</div>` 
+                    : '';
 
                 const delBtn = isAdminLoggedIn ? `<button class="delete-btn" onclick="deletePost(${post.id}, event)">[x] Delete</button>` : '';
-                const shareBtn = `<button class="reaction-btn" style="background:transparent; color:#666; font-size:12px; padding:5px;" onclick="copyPermalink(${post.id}, event)" title="Link to this post"># Share</button>`;
+                const editBtn = isAdminLoggedIn ? `<button class="pin-btn" onclick="openEditModal(${post.id}, event)">[Edit]</button>` : '';
+                const pinToggle = isAdminLoggedIn ? `<button class="pin-btn" onclick="togglePin(${post.id}, event)">${post.pinned ? '[Unpin]' : '[Pin]'}</button>` : '';
+                const shareBtn = `<button class="pin-btn" onclick="copyPermalink(${post.id}, event)" title="Link to this post" style="margin-left:auto;">#</button>`;
+                
+                const pinIcon = post.pinned ? '<span style="color:var(--accent-color);margin-right:5px;">📌</span>' : '';
 
                 return `
-                <article class="leaflet-item" id="${post.id}" onclick="openLightbox(${post.id})">
+                <article class="leaflet-item ${post.pinned ? 'pinned-post' : ''}" id="${post.id}" onclick="openLightbox(${post.id})">
                     <div class="leaflet-avatar">${avatar}</div>
                     <div class="leaflet-body">
-                        <div class="leaflet-header"><span class="leaflet-author">${authorName}</span><span>${post.date}</span>${shareBtn}${delBtn}</div>
-                        <div class="leaflet-content"><div>${contentHtml}</div>${mediaHtml}</div>
+                        <div class="leaflet-header">${pinIcon}<span class="leaflet-author">${authorName}</span><span>${post.date}</span>${shareBtn}${editBtn}${pinToggle}${delBtn}</div>
+                        <div class="leaflet-content"><div class="text-content-wrapper" id="content-${post.id}">${contentHtml}</div>${mediaHtml}</div>
+                        ${tagsHtml}
                         ${reactions}
                     </div>
                 </article>`;
             }).join('');
+
+            setTimeout(() => {
+                posts.forEach(post => {
+                    const el = document.getElementById(`content-${post.id}`);
+                    if(el && el.scrollHeight > 250) {
+                        el.innerHTML += `
+                        <div class="read-more-overlay" id="overlay-${post.id}">
+                            <button class="read-more-btn" onclick="event.stopPropagation(); toggleContent(${post.id})">+ Show More</button>
+                        </div>`;
+                    } else if (el) {
+                        el.style.maxHeight = 'none'; 
+                    }
+                });
+            }, 0);
+        }
+
+        function toggleContent(id) {
+            const el = document.getElementById(`content-${id}`);
+            const overlay = document.getElementById(`overlay-${id}`);
+            if(el) el.classList.add('expanded');
+            if(overlay) overlay.style.display = 'none';
         }
 
         function renderGallery() {
             const container = document.getElementById('gallery-container');
-            const items = [...postsCache].sort((a,b) => b.id - a.id).filter(p => p.media);
-            if(items.length === 0) { container.innerHTML = "<p>No images.</p>"; return; }
-            container.innerHTML = items.map(item => {
-                const type = getMediaType(item.media);
-                const el = type === 'video' ? `<video src="${item.media}" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video>` : `<img src="${item.media}" loading="lazy">`;
-                return `<div class="gallery-item" onclick="openMediaViewer('${item.media}', '${type}')">${el}</div>`;
+            const items = [...postsCache].sort((a,b) => b.id - a.id).filter(p => p.media && p.media.length > 0);
+            
+            if(items.length === 0) { container.innerHTML = "<p style='font-family:var(--font-mono);color:var(--gray);'>No images.</p>"; return; }
+            
+            let flatMedia = [];
+            items.forEach(post => {
+                let arr = Array.isArray(post.media) ? post.media : [post.media];
+                arr.forEach(m => flatMedia.push({url: m, id: post.id}));
+            });
+
+            container.innerHTML = flatMedia.map(item => {
+                const type = getMediaType(item.url);
+                const el = type === 'video' ? `<video src="${item.url}" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video>` : `<img src="${item.url}" loading="lazy">`;
+                return `<div class="gallery-item" onclick="openLightbox(${item.id})">${el}</div>`;
             }).join('');
         }
 
-        // --- INTERACTIONS & LIGHTBOX ---
+        function renderTagCloud() {
+            const container = document.getElementById('tag-cloud-container');
+            if(!container) return;
+            
+            const allTags = new Set();
+            postsCache.forEach(p => {
+                if(p.tags) p.tags.forEach(t => allTags.add(t));
+            });
+            
+            if(allTags.size === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = '<div style="margin:10px 0; border-top:1px dotted var(--border-color); padding-top:10px; font-size:11px; color:var(--gray); font-family:var(--font-mono);">TAGS</div>' + 
+                Array.from(allTags).sort().map(tag => {
+                    const activeClass = (activeTagFilter === tag) ? 'active' : '';
+                    return `<button class="tag-cloud-item ${activeClass}" onclick="filterByTag('${tag}')">//${tag}</button>`;
+                }).join('');
+        }
+
+        // User Interaction
         function handleReaction(postId, type) {
             if(!interactionsCache[postId]) interactionsCache[postId] = { likes: 0, dislikes: 0, comments: [] };
-            interactionsCache[postId][type + 's'] = (interactionsCache[postId][type + 's'] || 0) + 1;
+            
+            let userReactions = {};
+            try { userReactions = JSON.parse(localStorage.getItem(LOCAL_REACTIONS_KEY) || '{}'); } catch(e) {}
+            
+            const currentAction = userReactions[postId];
+            
+            if (currentAction === type) {
+                interactionsCache[postId][type + 's'] = Math.max(0, (interactionsCache[postId][type + 's'] || 0) - 1);
+                delete userReactions[postId];
+                showToast("Vote removed.", "info");
+            } else {
+                if (currentAction) {
+                    interactionsCache[postId][currentAction + 's'] = Math.max(0, (interactionsCache[postId][currentAction + 's'] || 0) - 1);
+                }
+                interactionsCache[postId][type + 's'] = (interactionsCache[postId][type + 's'] || 0) + 1;
+                userReactions[postId] = type;
+                showToast("Vote recorded!", "success");
+            }
+            
+            localStorage.setItem(LOCAL_REACTIONS_KEY, JSON.stringify(userReactions));
             renderLeaflets();
+            if(currentLightboxPostId === postId) openLightbox(postId); 
             saveInteractions();
         }
 
@@ -1126,15 +1494,34 @@ applchu wuz here
             const body = document.getElementById('lightbox-body');
             const ints = interactionsCache[postId] || { comments: [] };
             const comments = ints.comments || [];
+            const likes = ints.likes || 0;
+            const dislikes = ints.dislikes || 0;
             
+            let userReactions = {};
+            try { userReactions = JSON.parse(localStorage.getItem(LOCAL_REACTIONS_KEY) || '{}'); } catch(e) {}
+            const myAction = userReactions[postId];
+            const likeActive = myAction === 'like' ? 'active' : '';
+            const dislikeActive = myAction === 'dislike' ? 'active' : '';
+            
+            const total = likes + dislikes;
+            const ratio = total === 0 ? 50 : (likes / total) * 100;
+
+            let [lTxt, dTxt] = [currentConfig.likeLabel || '(＾∇＾)', currentConfig.dislikeLabel || '(；へ：)'];
+            if(currentConfig.reactionIcon === 'thumb') [lTxt, dTxt] = ['👍', '👎'];
+            if(currentConfig.reactionIcon === 'arrow') [lTxt, dTxt] = ['▲', '▼'];
+
             let mediaHtml = '';
             if (post.media) {
-                const type = getMediaType(post.media);
-                if (type === 'video') mediaHtml = `<div class="leaflet-media-container"><video controls autoplay loop muted playsinline style="width:100%" onclick="openMediaViewer('${post.media}', 'video')"><source src="${post.media}" type="video/mp4"></video></div>`;
-                else mediaHtml = `<div class="leaflet-media-container"><img src="${post.media}" alt="Attached Media" onclick="openMediaViewer('${post.media}', 'image')" onerror="this.style.display='none'"></div>`;
+                 let mediaArray = Array.isArray(post.media) ? post.media : [post.media];
+                 mediaHtml = mediaArray.map(url => {
+                     const type = getMediaType(url);
+                     if (type === 'video') return `<div class="leaflet-media-container"><video controls autoplay loop muted playsinline style="width:100%" onclick="openMediaViewer('${url}', 'video')"><source src="${url}" type="video/mp4"></video></div>`;
+                     else return `<div class="leaflet-media-container"><img src="${url}" alt="Attached Media" onclick="openMediaViewer('${url}', 'image')" onerror="this.style.display='none'"></div>`;
+                 }).join('');
             }
             
             const contentHtml = typeof marked !== 'undefined' ? marked.parse(post.content) : post.content;
+            
             const avatar = (currentConfig.pfpImage && currentConfig.pfpImage.length > 5) ? `<img src="${currentConfig.pfpImage}" style="width:100%; height:100%; object-fit:cover;">` : '🌿';
             const authorName = currentConfig.siteName || "Admin";
 
@@ -1143,25 +1530,73 @@ applchu wuz here
                 const renderTree = (pid, d) => {
                     const kids = comments.filter(c => c.parentId === pid);
                     if(!kids.length) return '';
-                    return `<ul class="${d?'reply-list':'comments-list'}">` + kids.map(c => `
+                    return `<ul class="${d?'reply-list':'comments-list'}">` + kids.map(c => {
+                        const initial = c.author ? c.author.charAt(0).toUpperCase() : '?';
+                        return `
                         <li class="comment-item">
-                            <div class="comment-header"><span class="comment-author">${c.author}</span><span>${c.date}</span>${isAdminLoggedIn ? `<button class="delete-btn" style="float:right;" onclick="deleteComment(${postId}, ${c.id})">[x]</button>` : ''}</div>
-                            <div>${c.text}</div>
-                            <button class="reply-btn" onclick="document.getElementById('comment-parent-id').value=${c.id};document.getElementById('reply-display').style.display='block';document.getElementById('reply-name').innerText='${c.author}'">Reply</button>
+                            <div class="comment-inner">
+                                <div class="comment-avatar">${initial}</div>
+                                <div class="comment-body">
+                                    <div class="comment-header">
+                                        <span class="comment-author">${c.author}</span>
+                                        <span>${c.date}</span>
+                                        ${isAdminLoggedIn ? `<button class="delete-btn" style="float:right;" onclick="deleteComment(${postId}, ${c.id})">[x]</button>` : ''}
+                                    </div>
+                                    <div>${c.text}</div>
+                                    <button class="reply-btn" onclick="document.getElementById('comment-parent-id').value=${c.id};document.getElementById('reply-display').style.display='block';document.getElementById('reply-name').innerText='${c.author}'">Reply</button>
+                                </div>
+                            </div>
                             ${renderTree(c.id, d+1)}
-                        </li>`).join('') + `</ul>`;
+                        </li>`;
+                    }).join('') + `</ul>`;
                 };
-                commentsHtml = `<div class="comments-section"><h3>Comments</h3><div id="comments-container">${renderTree(null, 0)}</div><div class="comment-form"><h4>Add Comment</h4><input type="text" id="comment-author" placeholder="Name"><input type="hidden" id="comment-parent-id"><div id="reply-display" style="display:none;font-size:11px;color:var(--accent-color);">Replying to <span id="reply-name"></span> <button onclick="this.parentNode.style.display='none';document.getElementById('comment-parent-id').value=''">x</button></div><textarea id="comment-text" rows="2" placeholder="Write..."></textarea><button class="action-btn" onclick="submitComment(${postId})">Post</button></div></div>`;
+                
+                commentsHtml = `
+                <div class="comments-section">
+                    <div class="lightbox-comment-form">
+                        <input type="text" id="comment-author" placeholder="Name">
+                        <input type="hidden" id="comment-parent-id">
+                        <div id="reply-display" style="display:none;font-size:11px;color:var(--accent-color);font-family:var(--font-mono);margin-bottom:5px;">Replying to <span id="reply-name"></span> <button onclick="this.parentNode.style.display='none';document.getElementById('comment-parent-id').value=''">x</button></div>
+                        <textarea id="comment-text" placeholder="Write your reply..."></textarea>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <button class="action-btn" style="width:auto;" onclick="submitComment(${postId})">Reply</button>
+                            <span class="form-footer-text">Please be respectful.</span>
+                        </div>
+                    </div>
+                    <div id="comments-container" class="lightbox-comments-list">${renderTree(null, 0)}</div>
+                </div>`;
             }
 
+            const tagsHtml = (post.tags && post.tags.length > 0) 
+                    ? `<div style="margin-top:10px;">${post.tags.map(t => `<span class="tag-link" onclick="event.stopPropagation(); filterByTag('${t}'); closeLightbox();">//${t}</span>`).join(' ')}</div>` 
+                    : '';
+            
+            const pinIcon = post.pinned ? '<span style="color:var(--accent-color);margin-right:5px;">📌</span>' : '';
+
             body.innerHTML = `
-                <div class="leaflet-item" style="cursor:default;">
+                <div class="leaflet-item" style="cursor:default; border:none; background:transparent; border-radius:0; box-shadow:none;">
                     <div class="leaflet-avatar">${avatar}</div>
                     <div class="leaflet-body">
-                        <div class="leaflet-header"><span class="leaflet-author">${authorName}</span><span>${post.date}</span></div>
+                        <div class="leaflet-header">${pinIcon}<span class="leaflet-author">${authorName}</span><span>${post.date}</span></div>
                         <div class="leaflet-content"><div>${contentHtml}</div>${mediaHtml}</div>
+                        ${tagsHtml}
                     </div>
                 </div>
+                
+                <div class="lightbox-stats" style="align-items:center;">
+                    <div class="lightbox-stat-item" style="color:var(--like-color); white-space:nowrap;"><b>${likes}</b> ${lTxt}</div>
+                    <div class="reaction-bar" style="margin:0 15px; height:4px; flex:1; background:var(--border-color); border-radius:2px; overflow:hidden;">
+                        <div class="reaction-fill" style="width: ${ratio}%; height:100%; background: linear-gradient(90deg, var(--like-color), var(--accent-color)); transition:width 0.3s;"></div>
+                    </div>
+                    <div class="lightbox-stat-item" style="color:var(--dislike-color); white-space:nowrap;"><b>${dislikes}</b> ${dTxt}</div>
+                    <div class="lightbox-stat-item" style="margin-left:15px; padding-left:15px; border-left:1px solid var(--border-color); white-space:nowrap;"><b>${comments.length}</b> Comments</div>
+                </div>
+
+                <div class="lightbox-actions">
+                    <button class="lightbox-action-btn ${likeActive}" onclick="handleReaction(${postId}, 'like')">${lTxt}</button>
+                    <button class="lightbox-action-btn ${dislikeActive}" onclick="handleReaction(${postId}, 'dislike')">${dTxt}</button>
+                </div>
+
                 ${commentsHtml}`;
             
             document.getElementById('leaflet-lightbox').classList.add('open');
@@ -1190,7 +1625,7 @@ applchu wuz here
             }
         }
 
-        // --- EXPORT & UTILS ---
+        // Export Utilities
         async function generateConfigFile(mode) {
             const data = await prepareSystemData(mode);
             if(!data) return;
@@ -1204,8 +1639,49 @@ applchu wuz here
             const html = "<!DOCTYPE html>\n" + clone.outerHTML;
             downloadFile(html, "index.html");
         }
+        
+        // RSS Feed Generator
+        function generateRSS() {
+            const siteUrl = window.location.origin + window.location.pathname.replace('index.html', '');
+            const now = new Date().toUTCString();
+            
+            let items = [...postsCache].sort((a,b) => b.id - a.id).map(post => {
+                const link = `${siteUrl}#${post.id}`;
+                let desc = post.content;
+                
+                let arr = Array.isArray(post.media) ? post.media : (post.media ? [post.media] : []);
+                if(arr.length > 0) desc += ` <br><a href="${arr[0]}">[Attached Media]</a>`;
+                
+                return `
+                <item>
+                    <title>${post.date}</title>
+                    <link>${link}</link>
+                    <guid>${link}</guid>
+                    <pubDate>${new Date(post.id).toUTCString()}</pubDate>
+                    <description><![CDATA[${desc}]]></description>
+                </item>`;
+            }).join('');
 
-        // --- HELPER WRAPPERS ---
+            const rss = `<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+<channel>
+  <title>${currentConfig.siteName}</title>
+  <link>${siteUrl}</link>
+  <description>${currentConfig.tagline}</description>
+  <lastBuildDate>${now}</lastBuildDate>
+  <generator>LBM 0.5</generator>
+  ${items}
+</channel>
+</rss>`;
+            return rss;
+        }
+
+        function downloadRSS() {
+            const rssContent = generateRSS();
+            downloadFile(rssContent, "rss.xml");
+        }
+
+        // UI Helpers
         function showSetup() { document.getElementById('setup-overlay').style.display = 'flex'; document.title = "System Setup"; }
         function hideUploadModal() { const m = document.getElementById('upload-modal'); if(m) m.style.display='none'; document.getElementById('upload-progress-bar').style.width='0%'; }
         function showUploadModal(txt) { document.getElementById('upload-modal').style.display='flex'; document.getElementById('upload-status-text').innerText=txt; document.getElementById('upload-error-log').style.display='none'; document.getElementById('upload-close-btn').style.display='none'; }
@@ -1213,15 +1689,44 @@ applchu wuz here
         
         function updateSyncStatus(s,t) { const d=document.getElementById('sync-dot'); if(d) d.className='sync-indicator '+s; const tx=document.getElementById('sync-text'); if(tx) tx.innerText=t; }
         function markUnsynced() { updateSyncStatus('unsynced', 'Unsaved Changes'); }
-        function handleFileSelect() { const f = document.getElementById('file-selector').files[0]; if(f) { currentUploadFile=f; document.getElementById('admin-media').value='img/'+f.name; document.getElementById('upload-file-info').innerText="Selected: "+f.name; document.getElementById('upload-file-info').style.display='inline-block'; } }
-        function clearPostInputs() { document.getElementById('admin-content').value=''; document.getElementById('admin-media').value=''; document.getElementById('file-selector').value=''; document.getElementById('upload-file-info').style.display='none'; currentUploadFile=null; }
-        function getMediaType(url) { if(!url) return null; const ext = url.split('.').pop().toLowerCase(); return ['mp4','webm','ogg'].includes(ext) ? 'video' : 'image'; }
+        
+        function handleFileSelect() { 
+            const files = document.getElementById('file-selector').files; 
+            if(files.length > 0) { 
+                currentUploadFiles = files; 
+                document.getElementById('admin-media').value = ''; 
+                document.getElementById('upload-file-info').innerText = `Selected: ${files.length} file(s)`; 
+                document.getElementById('upload-file-info').style.display='inline-block'; 
+            } 
+        }
+        
+        function clearPostInputs() { 
+            document.getElementById('admin-content').value=''; 
+            document.getElementById('admin-media').value=''; 
+            document.getElementById('admin-tags').value=''; 
+            document.getElementById('admin-pin').checked = false; 
+            document.getElementById('file-selector').value=''; 
+            document.getElementById('upload-file-info').style.display='none'; 
+            currentUploadFiles=[]; 
+        }
+        
+        function getMediaType(url) { 
+            if(!url) return null; 
+            const cleanUrl = url.split('?')[0];
+            const ext = cleanUrl.split('.').pop().toLowerCase(); 
+            return ['mp4','webm','ogg','mov'].includes(ext) ? 'video' : 'image'; 
+        }
         
         function switchTab(t) { document.querySelectorAll('.view-section').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.nav-btn').forEach(e=>e.classList.remove('active')); document.getElementById('tab-'+t).classList.add('active'); if(t==='leaflets') document.getElementById('nav-leaflets-btn').classList.add('active'); if(t==='admin') document.getElementById('admin-tab-btn').classList.add('active'); }
         function switchAdminSubTab(t) { document.getElementById('admin-sub-post').style.display='none'; document.getElementById('admin-sub-settings').style.display='none'; document.getElementById('admin-sub-'+t).style.display='block'; }
         
         function openMediaViewer(url, type) { 
-            currentMediaList = [...postsCache].sort((a,b) => b.id - a.id).filter(p => p.media).map(p => ({ url: p.media, type: getMediaType(p.media) }));
+            currentMediaList = [];
+            postsCache.forEach(p => {
+                 let arr = Array.isArray(p.media) ? p.media : (p.media ? [p.media] : []);
+                 arr.forEach(m => currentMediaList.push({url: m, type: getMediaType(m)}));
+            });
+            
             currentMediaIndex = currentMediaList.findIndex(m => m.url === url);
             if(currentMediaIndex === -1) { currentMediaList = [{url, type}]; currentMediaIndex = 0; }
             renderMediaOverlay();
