@@ -635,9 +635,17 @@ h2::before {
 .leaflet-media-container img,
 .leaflet-media-container video {
 	width: 100%;
-	height: auto;
+	height: 320px;
+	object-fit: cover;
+	object-position: top;
 	display: block;
 	border: none;
+}
+
+#leaflet-lightbox .leaflet-media-container img,
+#leaflet-lightbox .leaflet-media-container video {
+	height: auto;
+	object-fit: contain;
 }
 
 .media-count-badge {
@@ -1056,6 +1064,29 @@ h2::before {
 	border-top: none;
 	border-left: none;
 	border-right: none;
+}
+
+/* Admin Comment Styling */
+.comment-item.admin-comment {
+    border-left: 3px solid var(--accent-color);
+    background: linear-gradient(90deg, rgba(255,255,255,0.03), transparent);
+}
+
+.admin-badge {
+    background: var(--accent-color);
+    color: var(--bg-dark);
+    font-size: 0.6rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin-left: 5px;
+    vertical-align: middle;
+    font-weight: bold;
+}
+
+.comment-item.admin-comment .comment-avatar {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: var(--bg-dark);
 }
 
 .comment-inner {
@@ -1534,6 +1565,17 @@ footer {
 	color: var(--accent-hover-color);
 }
 
+/* Media Queue Styles */
+.media-queue { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+.media-queue-item { display: flex; align-items: center; background: var(--bg-dark); border: 1px solid var(--border-color); padding: 5px; border-radius: 4px; gap: 10px; }
+.media-preview { width: 40px; height: 40px; object-fit: cover; background: #000; border-radius: 2px; }
+.media-info { flex: 1; font-family: var(--font-mono); font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-controls { display: flex; gap: 2px; }
+.queue-btn { background: var(--border-color); color: var(--text-color); border: none; cursor: pointer; padding: 2px 8px; font-size: 0.8rem; border-radius: 2px; }
+.queue-btn:hover { background: var(--accent-color); color: var(--bg-dark); }
+.queue-btn.remove { color: var(--dislike-color); }
+.queue-btn.remove:hover { background: var(--dislike-color); color: #fff; }
+
 /* --- RESPONSIVE --- */
 @media (max-width: 900px) {
 	.layout-wrapper {
@@ -1721,6 +1763,11 @@ footer {
 		width: auto;
 		height: auto;
 	}
+
+    .leaflet-media-container img,
+    .leaflet-media-container video {
+        height: auto;
+    }
 }
 
 @media (max-width: 500px) {

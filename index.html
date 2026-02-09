@@ -179,8 +179,13 @@ applchu wuz here
             
             <textarea id="edit-post-content" rows="6" placeholder="Content (HTML & Markdown supported)" class="setup-input"></textarea>
             
-            <label style="font-size:11px; color:#aaa; margin-top:5px; font-family: var(--font-mono);">Media Path(s) (Comma separated for multiple)</label>
-            <input type="text" id="edit-post-media" placeholder="img/photo1.jpg, img/photo2.jpg" class="setup-input">
+            <label style="font-size:11px; color:#aaa; margin-top:5px; font-family: var(--font-mono);">Media Path(s)</label>
+            <div style="display:flex; gap:5px; margin-bottom:5px;">
+                <input type="text" id="edit-add-media-input" placeholder="Add URL..." class="setup-input" style="margin-bottom:0;">
+                <button class="action-btn" style="width:auto;" onclick="addUrlToQueue('edit')">Add</button>
+            </div>
+            <div id="edit-media-queue" class="media-queue"></div>
+            <input type="hidden" id="edit-post-media">
             
             <label style="font-size:11px; color:#aaa; margin-top:5px; font-family: var(--font-mono);">Tags</label>
             <input type="text" id="edit-post-tags" placeholder="art, news" class="setup-input">
@@ -328,11 +333,21 @@ applchu wuz here
                                 <div class="file-upload-wrapper" style="font-family: var(--font-mono); font-size: 0.8rem;">
                                     <input type="file" id="file-selector" onchange="handleFileSelect()" accept="image/*,video/*" multiple>
                                     <div id="upload-file-info" style="display:none; margin-left:10px; font-size:11px; color:var(--accent-color);"></div>
+                                    
+                                    <!-- New Media Queue -->
+                                    <div id="admin-media-queue" class="media-queue"></div>
                                 </div>
                             </div>
+                            
+                            <!-- Add URL Input -->
                             <div class="form-group" style="margin-bottom: 15px;">
-                                <input type="text" id="admin-media" placeholder="Media Path (e.g. img/photo.jpg or https://...)" class="setup-input">
+                                <label style="color:var(--accent-color); display:block; margin-bottom:5px; font-family: var(--font-mono); font-size: 0.7rem;">Add External URL</label>
+                                <div style="display:flex; gap:5px;">
+                                    <input type="text" id="admin-media-input" placeholder="https://..." class="setup-input" style="margin-bottom:0;">
+                                    <button class="action-btn" style="width:auto;" onclick="addUrlToQueue('admin')">Add</button>
+                                </div>
                             </div>
+
                             <div class="form-group" style="margin-bottom: 15px;">
                                 <input type="text" id="admin-tags" placeholder="Tags (comma separated: art, news, daily)" class="setup-input">
                             </div>
@@ -516,7 +531,6 @@ applchu wuz here
         // State Management
         let postsCache = []; 
         let interactionsCache = {}; 
-        let currentUploadFiles = []; 
         let globalAdminHash = null;
         let globalAuthToken = null; 
         let globalApiKey = null;
@@ -533,6 +547,7 @@ applchu wuz here
         let isBatchUploading = false;
         let currentBatchResolve = null;
         let currentBatchReject = null;
+        let currentPostMediaQueue = [];
 
         // Filter State
         let activeTagFilter = null;
@@ -724,7 +739,7 @@ applchu wuz here
                 globalAuthToken = newToken;
                 globalApiKey = null;
                 pendingPost = null; 
-                currentUploadFiles = [];
+                currentPostMediaQueue = [];
                 
                 document.getElementById('repair-modal').style.display = 'none';
                 showToast("Repair Successful! Retrying Save...", "success");
@@ -1104,7 +1119,6 @@ applchu wuz here
         // Post Management
         async function addPost() {
             const content = document.getElementById('admin-content').value;
-            const mediaInput = document.getElementById('admin-media').value;
             const tagsInput = document.getElementById('admin-tags').value;
             const pinned = document.getElementById('admin-pin').checked;
             
@@ -1113,36 +1127,42 @@ applchu wuz here
             const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
             const isLocal = window.location.protocol === 'file:' && !globalAuthToken;
 
-            // Batch File Processing
+            // Media Processing via Queue
             let finalMedia = [];
-            
-            if (currentUploadFiles && currentUploadFiles.length > 0 && !isLocal) {
+            const filesToUpload = currentPostMediaQueue.filter(item => item.type === 'file');
+
+            if (filesToUpload.length > 0 && !isLocal) {
                 showUploadModal("Initializing Batch Upload...");
                 isBatchUploading = true;
                 
                 try {
-                    for (let i = 0; i < currentUploadFiles.length; i++) {
-                        const file = currentUploadFiles[i];
+                    for (let i = 0; i < filesToUpload.length; i++) {
+                        const file = filesToUpload[i].val;
                         const count = i + 1;
-                        const total = currentUploadFiles.length;
+                        const total = filesToUpload.length;
                         
                         document.getElementById('upload-status-text').innerText = `Uploading image ${count}/${total}: ${file.name}`;
                         
+                        // We use the file name as the destination path logic
                         const path = 'img/' + file.name;
-                        
                         await promisifiedUpload(file, path);
-                        finalMedia.push(path);
                     }
                 } catch(err) {
                     handleUploadError("Batch Upload Failed: " + err);
                     isBatchUploading = false;
                     return; 
                 }
-                
                 isBatchUploading = false; 
-            } else if (mediaInput) {
-                finalMedia = mediaInput.split(',').map(s => s.trim());
             }
+
+            // Construct Final Media List based on Queue Order
+            currentPostMediaQueue.forEach(item => {
+                if (item.type === 'file') {
+                    finalMedia.push('img/' + item.val.name);
+                } else if (item.type === 'url') {
+                    finalMedia.push(item.val);
+                }
+            });
 
             let savedMedia = finalMedia.length > 0 ? finalMedia : ""; 
             if(finalMedia.length === 1) savedMedia = finalMedia[0];
@@ -1151,7 +1171,7 @@ applchu wuz here
             
             postsCache.push(newPost);
             
-            if (currentUploadFiles.length > 0 && isLocal) {
+            if (filesToUpload.length > 0 && isLocal) {
                  alert("Local Mode: You must manually move your files to 'img/' folder.");
             }
             
@@ -1179,26 +1199,30 @@ applchu wuz here
 
             document.getElementById('edit-post-id').value = post.id;
             document.getElementById('edit-post-content').value = post.content;
-            
-            let mediaStr = "";
-            if(Array.isArray(post.media)) mediaStr = post.media.join(', ');
-            else mediaStr = post.media || '';
-            
-            document.getElementById('edit-post-media').value = mediaStr;
             document.getElementById('edit-post-tags').value = (post.tags || []).join(', ');
             document.getElementById('edit-post-pin').checked = post.pinned || false;
+
+            // Populate Queue
+            currentPostMediaQueue = [];
+            if (post.media) {
+                let arr = Array.isArray(post.media) ? post.media : [post.media];
+                arr.forEach(url => {
+                    if(url.trim().length > 0) currentPostMediaQueue.push({ type: 'url', val: url.trim() });
+                });
+            }
+            renderMediaQueue('edit');
 
             document.getElementById('edit-overlay').style.display = 'flex';
         }
 
         function closeEditModal() {
             document.getElementById('edit-overlay').style.display = 'none';
+            currentPostMediaQueue = []; // Clear
         }
 
         function submitEditedPost() {
             const id = parseInt(document.getElementById('edit-post-id').value);
             const content = document.getElementById('edit-post-content').value;
-            const mediaInput = document.getElementById('edit-post-media').value;
             const tagsInput = document.getElementById('edit-post-tags').value;
             const pinned = document.getElementById('edit-post-pin').checked;
 
@@ -1206,7 +1230,8 @@ applchu wuz here
 
             const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
             
-            let media = mediaInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            // Construct Media from Queue
+            let media = currentPostMediaQueue.map(item => item.val);
             if(media.length === 0) media = "";
             else if(media.length === 1) media = media[0];
 
@@ -1433,7 +1458,7 @@ applchu wuz here
             container.innerHTML = flatMedia.map(item => {
                 const type = getMediaType(item.url);
                 const el = type === 'video' ? `<video src="${item.url}" muted loop onmouseover="this.play()" onmouseout="this.pause()"></video>` : `<img src="${item.url}" loading="lazy">`;
-                return `<div class="gallery-item" onclick="openLightbox(${item.id})">${el}</div>`;
+                return `<div class="gallery-item" onclick="event.stopPropagation(); openMediaViewer('${item.url}', '${type}')">${el}</div>`;
             }).join('');
         }
 
@@ -1532,13 +1557,16 @@ applchu wuz here
                     if(!kids.length) return '';
                     return `<ul class="${d?'reply-list':'comments-list'}">` + kids.map(c => {
                         const initial = c.author ? c.author.charAt(0).toUpperCase() : '?';
+                        const adminClass = c.isAdmin ? 'admin-comment' : '';
+                        const adminBadge = c.isAdmin ? '<span class="admin-badge">ADMIN</span>' : '';
+                        
                         return `
-                        <li class="comment-item">
+                        <li class="comment-item ${adminClass}">
                             <div class="comment-inner">
                                 <div class="comment-avatar">${initial}</div>
                                 <div class="comment-body">
                                     <div class="comment-header">
-                                        <span class="comment-author">${c.author}</span>
+                                        <span class="comment-author">${c.author} ${adminBadge}</span>
                                         <span>${c.date}</span>
                                         ${isAdminLoggedIn ? `<button class="delete-btn" style="float:right;" onclick="deleteComment(${postId}, ${c.id})">[x]</button>` : ''}
                                     </div>
@@ -1551,10 +1579,12 @@ applchu wuz here
                     }).join('') + `</ul>`;
                 };
                 
+                const defaultName = isAdminLoggedIn ? (currentConfig.siteName || "Admin") : "";
+                
                 commentsHtml = `
                 <div class="comments-section">
                     <div class="lightbox-comment-form">
-                        <input type="text" id="comment-author" placeholder="Name">
+                        <input type="text" id="comment-author" placeholder="Name" value="${defaultName}">
                         <input type="hidden" id="comment-parent-id">
                         <div id="reply-display" style="display:none;font-size:11px;color:var(--accent-color);font-family:var(--font-mono);margin-bottom:5px;">Replying to <span id="reply-name"></span> <button onclick="this.parentNode.style.display='none';document.getElementById('comment-parent-id').value=''">x</button></div>
                         <textarea id="comment-text" placeholder="Write your reply..."></textarea>
@@ -1612,7 +1642,14 @@ applchu wuz here
             if(!interactionsCache[postId]) interactionsCache[postId] = { likes: 0, dislikes: 0, comments: [] };
             if(!interactionsCache[postId].comments) interactionsCache[postId].comments = [];
             
-            interactionsCache[postId].comments.push({ id: Date.now(), author, text, date: new Date().toISOString().slice(0,16).replace('T',' '), parentId: pidVal ? parseInt(pidVal) : null });
+            interactionsCache[postId].comments.push({ 
+                id: Date.now(), 
+                author, 
+                text, 
+                date: new Date().toISOString().slice(0,16).replace('T',' '), 
+                parentId: pidVal ? parseInt(pidVal) : null,
+                isAdmin: isAdminLoggedIn
+            });
             openLightbox(postId); 
             saveInteractions();
         }
@@ -1693,11 +1730,73 @@ applchu wuz here
         function handleFileSelect() { 
             const files = document.getElementById('file-selector').files; 
             if(files.length > 0) { 
-                currentUploadFiles = files; 
-                document.getElementById('admin-media').value = ''; 
-                document.getElementById('upload-file-info').innerText = `Selected: ${files.length} file(s)`; 
-                document.getElementById('upload-file-info').style.display='inline-block'; 
+                for(let i=0; i<files.length; i++) {
+                    currentPostMediaQueue.push({ type: 'file', val: files[i] });
+                }
+                renderMediaQueue('admin');
+                document.getElementById('file-selector').value = ''; // Reset to allow adding more
             } 
+        }
+        
+        function addUrlToQueue(mode) {
+            const inputId = mode === 'admin' ? 'admin-media-input' : 'edit-add-media-input';
+            const val = document.getElementById(inputId).value.trim();
+            if(val) {
+                currentPostMediaQueue.push({ type: 'url', val: val });
+                renderMediaQueue(mode);
+                document.getElementById(inputId).value = '';
+            }
+        }
+
+        function renderMediaQueue(mode) {
+            const containerId = mode === 'admin' ? 'admin-media-queue' : 'edit-media-queue';
+            const container = document.getElementById(containerId);
+            if(!container) return;
+
+            container.innerHTML = currentPostMediaQueue.map((item, idx) => {
+                let prev = '';
+                let name = '';
+                
+                if(item.type === 'file') {
+                    name = item.val.name;
+                    if(item.val.type.startsWith('image/')) {
+                         prev = `<img src="${URL.createObjectURL(item.val)}" class="media-preview">`;
+                    } else {
+                         prev = `<div class="media-preview" style="background:#333; display:flex; align-items:center; justify-content:center;">FILE</div>`;
+                    }
+                } else {
+                    name = item.val;
+                    if(item.val.match(/\.(jpeg|jpg|gif|png)$/) != null) {
+                         prev = `<img src="${item.val}" class="media-preview">`;
+                    } else {
+                         prev = `<div class="media-preview" style="background:#333; display:flex; align-items:center; justify-content:center;">URL</div>`;
+                    }
+                }
+
+                return `
+                <div class="media-queue-item">
+                    ${prev}
+                    <div class="media-info">${name}</div>
+                    <div class="queue-controls">
+                        <button class="queue-btn" onclick="moveQueueItem(${idx}, -1, '${mode}')">▲</button>
+                        <button class="queue-btn" onclick="moveQueueItem(${idx}, 1, '${mode}')">▼</button>
+                        <button class="queue-btn remove" onclick="removeQueueItem(${idx}, '${mode}')">×</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function moveQueueItem(idx, dir, mode) {
+            if(idx + dir < 0 || idx + dir >= currentPostMediaQueue.length) return;
+            const temp = currentPostMediaQueue[idx];
+            currentPostMediaQueue[idx] = currentPostMediaQueue[idx+dir];
+            currentPostMediaQueue[idx+dir] = temp;
+            renderMediaQueue(mode);
+        }
+
+        function removeQueueItem(idx, mode) {
+            currentPostMediaQueue.splice(idx, 1);
+            renderMediaQueue(mode);
         }
         
         function clearPostInputs() { 
@@ -1707,7 +1806,8 @@ applchu wuz here
             document.getElementById('admin-pin').checked = false; 
             document.getElementById('file-selector').value=''; 
             document.getElementById('upload-file-info').style.display='none'; 
-            currentUploadFiles=[]; 
+            currentPostMediaQueue = [];
+            renderMediaQueue('admin');
         }
         
         function getMediaType(url) { 
@@ -1722,7 +1822,7 @@ applchu wuz here
         
         function openMediaViewer(url, type) { 
             currentMediaList = [];
-            postsCache.forEach(p => {
+            [...postsCache].sort((a,b) => b.id - a.id).forEach(p => {
                  let arr = Array.isArray(p.media) ? p.media : (p.media ? [p.media] : []);
                  arr.forEach(m => currentMediaList.push({url: m, type: getMediaType(m)}));
             });
