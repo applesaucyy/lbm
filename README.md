@@ -29,9 +29,9 @@ Since LBM needs to update your site files for you, it needs permission.
 
 Now it's time to configure your site before uploading it.
 
-1. Download the LBM files (`index.html` and `style.css`) to a folder on your computer.
+1. Download the LBM files (`index.html`, `logic.js` and `style.css`) to a folder on your computer.
 2. Go back to your **Neocities Dashboard**
-3. Drag and drop `index.html` and `style.css` to upload them
+3. Drag and drop `index.html`, `logic.js` and `style.css` to upload them
 4. Click your site link (e.g., `yoursite.neocities.org`) and you will see the **"SYSTEM BOOT // INITIAL SETUP"** screen.
 
 Fill out the form on the screen:
@@ -45,7 +45,7 @@ Fill out the form on the screen:
 
 1. When you are happy, click **"GENERATE `system.js`"**.
 2. Your browser will download the generated `system.js` file.
-3. Drag and drop this into your Neocities Dashboard to be alongside your `index.html` and `style.css`.
+3. Drag and drop this into your Neocities Dashboard to be alongside your `index.html`, `logic.js` and `style.css`.
 
 ### **That's it!** 
 Reload the page, and your blog should be live!
@@ -55,7 +55,7 @@ Reload the page, and your blog should be live!
 **Logging In**
 
 1. Go to your live site.
-2. Click the **"Login"** button on the sidebar.
+2. Click the **"Login"** button on the bottom of the sidebar.
 3. Enter the **password** you created in Step 2.
 4. The **Admin Dashboard** will appear.
 
@@ -67,7 +67,8 @@ Reload the page, and your blog should be live!
 - Images (Video with Supporter):
   1. Click **"Choose File"** in the dashboard.
   2. Select an image or video from your computer.
-  3. The system will automatically upload this file to your Neocities `img/` folder and attach it to your post (Alternatively, you could upload it to NeoCities directly and link to it using the `Media Path` area below the upload button).
+  3. The system will automatically upload this file to your Neocities `img/` folder and attach it to your post 
+- Alternatively, you can use the "Media Path" area to link to images, videos, or audio files and have them embed directly
 - Click "Post & Sync".
 - Watch the Sync Status indicator. When it turns green ("System Synced"), your post is live.
 
