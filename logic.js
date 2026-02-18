@@ -839,8 +839,16 @@ function applyVisualConfig() {
         else msgBtn.style.display = 'none';
     }
 
-    const regBtn = document.getElementById('nav-register-btn');
-    if(regBtn) regBtn.style.display = currentConfig.disableSignups ? 'none' : 'block';
+	const regBtn = document.getElementById('nav-register-btn');
+    const loginBtn = document.getElementById('nav-login-btn');
+    
+    if (currentConfig.disableSignups) {
+        if(regBtn) regBtn.style.display = 'none';
+        if(loginBtn && !currentUser) loginBtn.style.display = 'none';
+    } else {
+        if(regBtn) regBtn.style.display = 'block';
+        if(loginBtn) loginBtn.style.display = 'block';
+    }
 }
 
 function updateSetupPreview() { scrapeConfig('setup'); applyVisualConfig(); }
