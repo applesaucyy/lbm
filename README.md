@@ -2,7 +2,8 @@
 
 **LBM (Leaflet Blog Manager)** is a little system that allows you to run a (somewhat) dynamic micro-blog (like Twitter, or a lil’ diary) on static hosting sites like [**Neocities**](https://neocities.org) without needing to know how to code.
 
-<img width="1470" height="1291" alt="Screenshot of LBM" src="https://github.com/user-attachments/assets/93fa3211-d8a0-4f36-8024-e93b86f43892" />
+<img width="1200" height="975" alt="image" src="https://github.com/user-attachments/assets/f796a309-eb47-46a7-86ff-162d3517d1f9" />
+
 
 
 ## **How it Works**
