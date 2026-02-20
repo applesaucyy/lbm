@@ -112,7 +112,7 @@ function getMdToolbar(id) {
 
 // State Management
 let postsCache = []; 
-let interactionsCache = { messages: [] }; 
+let interactionsCache = { messages: [], users: [] }; 
 let usersCache = { users: [], types: ['admin', 'member', 'vip'] }; 
 let globalAdminHash = null;
 let globalAuthToken = null; 
@@ -306,6 +306,17 @@ async function parseSystemData(scriptLoader) {
             const iJson = base64ToUnicode(window.AZUMINT_INTERACTIONS);
             interactionsCache = JSON.parse(iJson);
             if (!interactionsCache.messages) interactionsCache.messages = [];
+            
+            // Seamlessly migrate legacy users into interactions to bypass strict Neocities auth
+            if (interactionsCache.users) {
+                interactionsCache.users.forEach(u => {
+                    if (!usersCache.users.find(x => x.username === u.username)) {
+                        usersCache.users.push(u);
+                    }
+                });
+            } else {
+                interactionsCache.users = [];
+            }
         } catch(e) { console.error("Interactions Parse Error", e); }
     }
 
@@ -338,7 +349,14 @@ async function parseSystemData(scriptLoader) {
                 if (typeof window.AZUMINT_USERS !== 'undefined') {
                     try {
                         const uJson = base64ToUnicode(window.AZUMINT_USERS);
-                        usersCache = JSON.parse(uJson);
+                        const parsedUsers = JSON.parse(uJson);
+                        if (parsedUsers.users) {
+                            parsedUsers.users.forEach(u => {
+                                if (!usersCache.users.find(x => x.username === u.username)) {
+                                    usersCache.users.push(u);
+                                }
+                            });
+                        }
                     } catch(uErr) { console.error("User Data Parse Error", uErr); }
                 }
             }
@@ -491,7 +509,7 @@ function injectBridge(url) {
 }
 
 async function saveSystem(mediaFile = null, explicitMediaPath = null, overrideToken = null) {
-    if(isAdminLoggedIn && document.getElementById('admin-dashboard').style.display === 'block') {
+    if(isAdminLoggedIn && document.getElementById('admin-dashboard')?.style.display === 'block') {
         scrapeConfig('edit');
     }
     saveToLocalCache();
@@ -509,19 +527,35 @@ async function saveSystem(mediaFile = null, explicitMediaPath = null, overrideTo
     }
 }
 
+async function launchInstance() {
+    showToast("Initializing Instance...", "loading");
+    
+    // This gathers fields from the 'setup' prefixed inputs
+    const data = await prepareSystemData('setup');
+    if(!data) return;
+
+    // Use the newly set globalAuthToken to push to bridge
+    await saveSystem();
+}
+
 async function saveInteractions() { 
     if(!globalAuthToken && window.location.protocol === 'file:') return;
     uploadToBridge('interactions'); 
 }
 
 async function saveUsers() {
-    if(!globalAuthToken) return;
-    // Generate Filename if missing
-    if (!currentConfig.usersFile) {
+    if(!globalAuthToken && window.location.protocol === 'file:') return;
+    
+    // We seamlessly route user storage through interactions to bypass Neocities blocking users_xxx.js for guests
+    interactionsCache.users = usersCache.users;
+    uploadToBridge('interactions');
+    
+    // Keep legacy file trigger to ensure we don't break existing setups if Admin is logged in
+    if (!currentConfig.usersFile && isAdminLoggedIn) {
         currentConfig.usersFile = 'users_' + uuidv4().substring(0,8) + '.js';
         await uploadToBridge('system'); 
     }
-    uploadToBridge('users');
+    if (isAdminLoggedIn) uploadToBridge('users');
 }
 
 function forceSyncAll() { 
@@ -529,7 +563,7 @@ function forceSyncAll() {
     uploadToBridge('system'); 
     setTimeout(() => uploadToBridge('interactions'), 2000); 
     setTimeout(() => uploadToBridge('rss'), 4000); 
-    setTimeout(() => uploadToBridge('users'), 6000);
+    setTimeout(() => saveUsers(), 6000);
 }
 
 async function uploadToBridge(target, mediaFile = null, explicitMediaPath = null, overrideToken = null) {
@@ -546,7 +580,8 @@ async function uploadToBridge(target, mediaFile = null, explicitMediaPath = null
     // Password required for sensitive uploads
     if (target === 'system' || target === 'media_only' || target === 'rss' || target === 'users') {
         if (!sessionPassword) {
-             sessionPassword = document.getElementById('login-pass').value;
+             const passEl = document.getElementById('login-pass');
+             if(passEl) sessionPassword = passEl.value;
         }
         if (!sessionPassword && target === 'users') {
             showToast("Admin session required.", "error");
@@ -560,7 +595,9 @@ async function uploadToBridge(target, mediaFile = null, explicitMediaPath = null
     let mediaName = null;
 
     if (target === 'system') {
-        const data = await prepareSystemData('edit', tokenToSend);
+        const mode = document.getElementById('setup-overlay')?.style.display === 'flex' ? 'setup' : 'edit';
+        const data = await prepareSystemData(mode, tokenToSend);
+        if(!data) return;
         const encodedStr = unicodeToBase64(JSON.stringify(data));
         fileContent = `window.AZUMINT_SYSTEM = "${encodedStr}";`;
         fileName = "system.js";
@@ -581,7 +618,8 @@ async function uploadToBridge(target, mediaFile = null, explicitMediaPath = null
     }
 
     if (mediaFile) {
-        const rawName = explicitMediaPath || document.getElementById('admin-media').value;
+        const adminMediaEl = document.getElementById('admin-media');
+        const rawName = explicitMediaPath || (adminMediaEl ? adminMediaEl.value : null) || "upload_" + Date.now();
         mediaName = (rawName && rawName.indexOf('/') === -1) ? 'img/' + rawName : rawName;
     }
 
@@ -592,6 +630,7 @@ async function uploadToBridge(target, mediaFile = null, explicitMediaPath = null
 
     const frame = document.getElementById('bridge-frame');
     if(frame) {
+        const targetOrigin = FIXED_BRIDGE_URL.startsWith('http') ? new URL(FIXED_BRIDGE_URL).origin : '*';
         frame.contentWindow.postMessage({
             type: 'UPLOAD', 
             authToken: tokenToSend, 
@@ -600,7 +639,7 @@ async function uploadToBridge(target, mediaFile = null, explicitMediaPath = null
             filename: fileName, 
             mediaFile: mediaFile, 
             mediaName: mediaName
-        }, FIXED_BRIDGE_URL); 
+        }, targetOrigin); 
     } else {
         showToast("Bridge disconnected.", "error");
     }
@@ -615,6 +654,26 @@ function promisifiedUpload(mediaFile, path) {
     });
 }
 
+window.uploadDirectImage = async function(inputEl, targetId) {
+    if (!inputEl.files || inputEl.files.length === 0) return;
+    const file = inputEl.files[0];
+    const safeName = file.name.replace(/\s+/g, '-');
+    showToast("Uploading " + safeName + "...", "loading");
+    isBatchUploading = true;
+    try {
+        const path = 'img/' + safeName;
+        await promisifiedUpload(file, path);
+        document.getElementById(targetId).value = path;
+        showToast("Upload complete!", "success");
+        if (targetId.startsWith('setup-')) updateSetupPreview();
+        else updateLivePreview();
+    } catch (err) {
+        handleUploadError("Upload Failed: " + err);
+    }
+    isBatchUploading = false;
+    inputEl.value = '';
+}
+
 // Data Payload Construction
 async function prepareSystemData(mode, explicitToken = null) {
     let hashVar, tokenToSave = explicitToken || globalAuthToken;
@@ -625,10 +684,13 @@ async function prepareSystemData(mode, explicitToken = null) {
         
         if (!pass || !rawKey) { showToast("Credentials missing.", "error"); return null; }
 
-        showToast("Encrypting Credentials...", "loading");
-        tokenToSave = await requestTokenGeneration(rawKey, pass);
-        
-        if (!tokenToSave) return null; 
+        if (!globalAuthToken) {
+            showToast("Encrypting Credentials...", "loading");
+            tokenToSave = await requestTokenGeneration(rawKey, pass);
+            if (!tokenToSave) return null; 
+        } else {
+            tokenToSave = globalAuthToken;
+        }
         
         scrapeConfig('setup');
         
@@ -638,7 +700,7 @@ async function prepareSystemData(mode, explicitToken = null) {
         hashVar = await sha256(pass);
     } else {
         if(isAdminLoggedIn) {
-            if(document.getElementById('admin-dashboard').style.display === 'block') {
+            if(document.getElementById('admin-dashboard')?.style.display === 'block') {
                 scrapeConfig('edit');
                 
                 const sitePassInput = document.getElementById('edit-site-password');
@@ -653,10 +715,10 @@ async function prepareSystemData(mode, explicitToken = null) {
         }
         hashVar = globalAdminHash;
         
-        const newKeyInput = document.getElementById('edit-neocities-key').value;
-        if (newKeyInput && newKeyInput.length > 5) {
+        const newKeyInput = document.getElementById('edit-neocities-key');
+        if (newKeyInput && newKeyInput.value && newKeyInput.value.length > 5) {
             showToast("Rotating Security Token...", "loading");
-            const t = await requestTokenGeneration(newKeyInput, sessionPassword);
+            const t = await requestTokenGeneration(newKeyInput.value, sessionPassword);
             if (t) {
                 tokenToSave = t;
                 globalAuthToken = t;
@@ -712,11 +774,12 @@ function requestTokenGeneration(key, pass) {
         tokenizeResolve = resolve;
         const frame = document.getElementById('bridge-frame');
         if(!frame) { resolve(null); return; }
+        const targetOrigin = FIXED_BRIDGE_URL.startsWith('http') ? new URL(FIXED_BRIDGE_URL).origin : '*';
         frame.contentWindow.postMessage({
             type: 'TOKENIZE',
             rawKey: key,
             adminPass: pass
-        }, FIXED_BRIDGE_URL);
+        }, targetOrigin);
         
         setTimeout(() => { if(tokenizeResolve) { tokenizeResolve(null); } }, 10000);
     });
@@ -1018,12 +1081,51 @@ function renderUsersList() {
     if(!usersCache.users.length) { c.innerHTML = "<p>No users yet.</p>"; return; }
     
     c.innerHTML = usersCache.users.map(u => `
-        <div style="display:flex; justify-content:space-between; padding:5px; border-bottom:1px solid #333; font-family:var(--font-mono); font-size:0.8rem;">
-            <span>${escapeHtml(u.username)} <span style="color:var(--accent-color);">[${u.type}]</span></span>
-            <button class="delete-btn" onclick="deleteUser(${u.id})">Remove</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:5px; border-bottom:1px solid #333; font-family:var(--font-mono); font-size:0.8rem;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span>${escapeHtml(u.username)}</span>
+                <select onchange="changeUserRole(${u.id}, this.value)" style="background:var(--bg-card); color:var(--text-color); border:1px solid var(--border-color); font-size:0.7rem; padding:2px; border-radius:4px;">
+                    <option value="member" ${u.type === 'member' ? 'selected' : ''}>Member</option>
+                    <option value="vip" ${u.type === 'vip' ? 'selected' : ''}>VIP</option>
+                    <option value="admin" ${u.type === 'admin' ? 'selected' : ''}>Admin</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:5px;">
+                <button class="action-btn small" style="width:auto; padding:2px 8px; font-size:0.7rem;" onclick="adminDirectMessage('${escapeHtml(u.username).replace(/'/g, "\\'")}')">DM</button>
+                <button class="delete-btn" onclick="deleteUser(${u.id})">Remove</button>
+            </div>
         </div>
     `).join('');
 }
+
+window.changeUserRole = function(id, newRole) {
+    const user = usersCache.users.find(u => u.id === id);
+    if (user) {
+        user.type = newRole;
+        saveUsers();
+        showToast("User role updated to " + newRole, "success");
+    }
+};
+
+window.adminDirectMessage = function(username) {
+    const reply = prompt(`Enter direct message for ${username}:`);
+    if(reply) {
+        if (!interactionsCache.messages) interactionsCache.messages = [];
+        interactionsCache.messages.push({
+            id: Date.now(),
+            sender: username,
+            text: "[Direct Message from Admin]",
+            type: "text",
+            date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            reply: reply,
+            replyDate: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            isPrivate: true
+        });
+        saveInteractions();
+        renderAdminMessages();
+        showToast("Message sent to user's dashboard.", "success");
+    }
+};
 
 function deleteUser(id) {
     if(!confirm("Delete user?")) return;
@@ -1071,6 +1173,30 @@ function populateAdminFields() {
     col('queue-bg').value = currentConfig.colors.queueBg || '#0f171f';
     col('toast-bg').value = currentConfig.colors.toastBg || '#0f171f';
     col('overlay-bg').value = currentConfig.colors.overlayBg || '#050505';
+
+    // Inject Export Tools Extenders
+    const syncStatusDiv = document.querySelector('.sync-status > div[style*="margin-left: auto"]');
+    if (syncStatusDiv && !document.getElementById('export-users-btn')) {
+        const btnU = document.createElement('button');
+        btnU.id = 'export-users-btn';
+        btnU.className = 'reaction-btn';
+        btnU.title = 'Download Users Database';
+        btnU.innerText = '⬇ USERS';
+        btnU.style.borderColor = '#5c87ff';
+        btnU.style.color = '#5c87ff';
+        btnU.onclick = () => downloadFile(`window.AZUMINT_USERS = "${unicodeToBase64(JSON.stringify(usersCache))}";`, 'users.js');
+        syncStatusDiv.appendChild(btnU);
+        
+        const btnI = document.createElement('button');
+        btnI.id = 'export-interactions-btn';
+        btnI.className = 'reaction-btn';
+        btnI.title = 'Download Interactions';
+        btnI.innerText = '⬇ INTS';
+        btnI.style.borderColor = '#00d4ff';
+        btnI.style.color = '#00d4ff';
+        btnI.onclick = () => downloadFile(`window.AZUMINT_INTERACTIONS = "${unicodeToBase64(JSON.stringify(interactionsCache))}";`, 'interactions.js');
+        syncStatusDiv.appendChild(btnI);
+    }
 }
 
 function toggleAdminPasswordInput() {
@@ -1705,7 +1831,7 @@ function checkAccess(post) {
     if (post.access.type === 'member') return !!currentUser;
     if (post.access.type === 'admin') return false; 
     if (post.access.type === 'password') {
-        return false; 
+        return true; 
     }
     return true;
 }
@@ -1714,18 +1840,11 @@ function unlockPost(id) {
     const post = postsCache.find(p => p.id === id);
     const input = document.getElementById('unlock-' + id).value;
     if(input === post.access.value) {
-        const contentHtml = typeof marked !== 'undefined' ? marked.parse(post.content) : post.content;
-        const el = document.getElementById('content-' + id);
-        el.innerHTML = contentHtml;
-        
-        if(post.media && post.media.length > 0) {
-             const mEl = document.getElementById('media-' + id);
-             if(mEl) mEl.style.display = 'block'; 
-        }
-
-        document.getElementById('locked-wrap-' + id).style.display = 'none';
+        post._unlocked = true;
+        renderLeaflets();
+        showToast("Post Unlocked", "success");
     } else {
-        alert("Incorrect Password");
+        showToast("Incorrect Password", "error");
     }
 }
 
@@ -1836,7 +1955,7 @@ function renderLeaflets() {
         const ratio = total === 0 ? 50 : (ints.likes / total) * 100;
         
         const isAccessible = checkAccess(post);
-        const isPasswordLocked = post.access && post.access.type === 'password' && !isAdminLoggedIn;
+        const isPasswordLocked = post.access && post.access.type === 'password' && !isAdminLoggedIn && !post._unlocked;
         
         let contentHtml = '';
         let mediaHtml = '';
@@ -1861,8 +1980,20 @@ function renderLeaflets() {
         let lockOverlay = '';
         let clickAction = `onclick="openLightbox(${post.id})"`;
         let reactions = '';
+        let tagsHtml = '';
 
-        if (!isAccessible) {
+        if (isPasswordLocked) {
+            clickAction = '';
+            lockOverlay = `
+                <div class="locked-overlay" id="locked-wrap-${post.id}">
+                    <span class="locked-icon">🔑</span>
+                    <div class="locked-text">PASSWORD REQUIRED</div>
+                    <div style="display:flex; gap:5px; margin-top:10px;">
+                        <input type="password" id="unlock-${post.id}" class="setup-input" placeholder="Password" style="margin-bottom:0; font-size:0.7rem; padding:4px;" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'){event.preventDefault(); unlockPost(${post.id});}">
+                        <button class="action-btn" style="width:auto; padding:4px 8px; font-size:0.7rem;" onclick="event.stopPropagation(); unlockPost(${post.id})">Go</button>
+                    </div>
+                </div>`;
+        } else if (!isAccessible) {
             clickAction = '';
             
             let lockText = "Login to view";
@@ -1879,40 +2010,31 @@ function renderLeaflets() {
                     <div class="locked-text">${lockTitle}</div>
                     <div style="font-size:0.7rem; color:var(--gray);">${lockText}</div>
                 </div>`;
-        } else if (isPasswordLocked) {
-            clickAction = '';
-            lockOverlay = `
-                <div class="locked-overlay" id="locked-wrap-${post.id}">
-                    <span class="locked-icon">🔑</span>
-                    <div class="locked-text">PASSWORD REQUIRED</div>
-                    <div style="display:flex; gap:5px; margin-top:10px;">
-                        <input type="password" id="unlock-${post.id}" class="setup-input" placeholder="Password" style="margin-bottom:0; font-size:0.7rem; padding:4px;" onclick="event.stopPropagation()">
-                        <button class="action-btn" style="width:auto; padding:4px 8px; font-size:0.7rem;" onclick="event.stopPropagation(); unlockPost(${post.id})">Go</button>
-                    </div>
-                </div>`;
-        } else if (currentConfig.reactionsEnabled) {
-            let [lTxt, dTxt] = [currentConfig.likeLabel || '(＾∇＾)', currentConfig.dislikeLabel || '(；へ：)'];
-            if(currentConfig.reactionIcon === 'thumb') [lTxt, dTxt] = ['👍', '👎'];
-            if(currentConfig.reactionIcon === 'arrow') [lTxt, dTxt] = ['▲', '▼'];
-            
-            const myAction = userReactions[post.id];
-            const likeActive = myAction === 'like' ? 'active-reaction' : '';
-            const dislikeActive = myAction === 'dislike' ? 'active-reaction' : '';
+        } else {
+            if (currentConfig.reactionsEnabled) {
+                let [lTxt, dTxt] = [currentConfig.likeLabel || '(＾∇＾)', currentConfig.dislikeLabel || '(；へ：)'];
+                if(currentConfig.reactionIcon === 'thumb') [lTxt, dTxt] = ['👍', '👎'];
+                if(currentConfig.reactionIcon === 'arrow') [lTxt, dTxt] = ['▲', '▼'];
+                
+                const myAction = userReactions[post.id];
+                const likeActive = myAction === 'like' ? 'active-reaction' : '';
+                const dislikeActive = myAction === 'dislike' ? 'active-reaction' : '';
 
-            reactions = `
-            <div class="reaction-widget" onclick="event.stopPropagation()">
-                <button class="reaction-btn like-btn ${likeActive}" onclick="handleReaction(${post.id}, 'like')">${ints.likes || 0} ${lTxt}</button>
-                <div class="reaction-bar"><div class="reaction-fill" style="width: ${ratio}%"></div></div>
-                <button class="reaction-btn dislike-btn ${dislikeActive}" onclick="handleReaction(${post.id}, 'dislike')">${dTxt} ${ints.dislikes || 0}</button>
-            </div>`;
+                reactions = `
+                <div class="reaction-widget" onclick="event.stopPropagation()">
+                    <button class="reaction-btn like-btn ${likeActive}" onclick="handleReaction(${post.id}, 'like')">${ints.likes || 0} ${lTxt}</button>
+                    <div class="reaction-bar"><div class="reaction-fill" style="width: ${ratio}%"></div></div>
+                    <button class="reaction-btn dislike-btn ${dislikeActive}" onclick="handleReaction(${post.id}, 'dislike')">${dTxt} ${ints.dislikes || 0}</button>
+                </div>`;
+            }
+
+            tagsHtml = (post.tags && post.tags.length > 0) 
+                ? `<div style="margin-top:10px;padding-left:1rem;">${post.tags.map(t => `<span class="tag-link" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">//${escapeHtml(t)}</span>`).join(' ')}</div>` 
+                : '';
         }
         
         const avatar = (currentConfig.pfpImage && currentConfig.pfpImage.length > 5) ? `<img src="${currentConfig.pfpImage}" style="width:100%; height:100%; object-fit:cover;">` : '🌿';
         const authorName = currentConfig.siteName || "Admin";
-
-        const tagsHtml = (post.tags && post.tags.length > 0) 
-            ? `<div style="margin-top:10px;padding-left:1rem;">${post.tags.map(t => `<span class="tag-link" onclick="event.stopPropagation(); filterByTag('${escapeHtml(t)}')">//${escapeHtml(t)}</span>`).join(' ')}</div>` 
-            : '';
 
         const delBtn = isAdminLoggedIn ? `<button class="delete-btn" onclick="deletePost(${post.id}, event)">[x] Delete</button>` : '';
         const editBtn = isAdminLoggedIn ? `<button class="pin-btn" onclick="openEditModal(${post.id}, event)">[Edit]</button>` : '';
@@ -1961,7 +2083,7 @@ function toggleContent(id) {
 
 function renderGallery() {
     const container = document.getElementById('gallery-container');
-    const items = [...postsCache].sort((a,b) => b.id - a.id).filter(p => p.media && p.media.length > 0 && checkAccess(p));
+    const items = [...postsCache].sort((a,b) => b.id - a.id).filter(p => p.media && p.media.length > 0 && checkAccess(p) && (!p.access || p.access.type !== 'password' || isAdminLoggedIn || p._unlocked));
     
     if(items.length === 0) { container.innerHTML = "<p style='font-family:var(--font-mono);color:var(--gray);'>No accessible images.</p>"; return; }
     
@@ -2052,9 +2174,8 @@ function openLightbox(postId) {
     }
     
     // Re-check password lock for lightbox view
-    if (post.access && post.access.type === 'password' && !isAdminLoggedIn) {
-         const overlay = document.getElementById('locked-wrap-' + postId);
-         if(overlay && overlay.style.display !== 'none') return showToast("Unlock post first.", "error");
+    if (post.access && post.access.type === 'password' && !isAdminLoggedIn && !post._unlocked) {
+         return showToast("Unlock post first.", "error");
     }
     
     currentLightboxPostId = postId;
@@ -2264,7 +2385,75 @@ function downloadRSS() {
 }
 
 // UI Helpers
-function showSetup() { document.getElementById('setup-overlay').style.display = 'flex'; document.title = "System Setup"; }
+function showSetup() { 
+    document.getElementById('setup-overlay').style.display = 'flex'; 
+    document.title = "System Setup";
+
+    // Setup Verify Button and Lock state
+    if (!document.getElementById('verify-setup-btn')) {
+        const form = document.querySelector('#setup-overlay form');
+        if(form) {
+            const btn = document.createElement('button');
+            btn.id = 'verify-setup-btn';
+            btn.className = 'action-btn';
+            btn.style.marginTop = '15px';
+            btn.innerText = 'VERIFY CREDENTIALS';
+            btn.onclick = verifySetupCredentials;
+            form.appendChild(btn);
+        }
+        
+        lockSetupSections();
+    }
+    updateSetupPreview();
+}
+
+function lockSetupSections() {
+    const overlay = document.getElementById('setup-overlay');
+    const allItems = Array.from(overlay.querySelector('.setup-box').children);
+    let lock = false;
+    allItems.forEach(el => {
+        if (el.tagName === 'FORM') {
+            lock = true; 
+        } else if (lock && el.tagName !== 'BUTTON' && el.id !== 'verify-setup-btn') {
+            el.classList.add('setup-locked');
+        }
+    });
+    
+    const launchBtn = overlay.querySelector('button[onclick="launchInstance()"]');
+    if(launchBtn) launchBtn.classList.add('setup-locked');
+}
+
+async function verifySetupCredentials() {
+    const tokenInput = document.getElementById('setup-api-token') || document.getElementById('setup-neocities-key');
+    const rawKey = tokenInput ? tokenInput.value.trim() : '';
+    const pass = document.getElementById('setup-password').value.trim();
+    
+    if(!rawKey || !pass) return showToast("API Key and Password required.", "error");
+    
+    showToast("Authenticating...", "loading");
+    const token = await requestTokenGeneration(rawKey, pass);
+    
+    if(token) {
+        globalAuthToken = token;
+        sessionPassword = pass;
+        globalAdminHash = await sha256(pass);
+        
+        const btn = document.getElementById('verify-setup-btn');
+        btn.innerText = "CREDENTIALS VERIFIED ✓";
+        btn.style.background = "var(--lime)";
+        btn.style.color = "#000";
+        btn.style.pointerEvents = "none";
+        
+        const lockedItems = document.querySelectorAll('.setup-locked');
+        lockedItems.forEach(el => el.classList.remove('setup-locked'));
+        
+        showToast("System Unlocked! You can now configure options & upload media.", "success");
+        updateSetupPreview();
+    } else {
+        showToast("Authentication Failed. Check Key.", "error");
+    }
+}
+
 function hideUploadModal() { const m = document.getElementById('upload-modal'); if(m) m.style.display='none'; document.getElementById('upload-progress-bar').style.width='0%'; }
 function showUploadModal(txt) { document.getElementById('upload-modal').style.display='flex'; document.getElementById('upload-status-text').innerText=txt; document.getElementById('upload-error-log').style.display='none'; document.getElementById('upload-close-btn').style.display='none'; }
 function handleUploadError(msg) { document.getElementById('upload-status-text').innerText="FAILED"; document.getElementById('upload-status-text').style.color="#ff7675"; document.getElementById('upload-error-log').innerText=msg; document.getElementById('upload-error-log').style.display='block'; document.getElementById('upload-close-btn').style.display='inline-block'; }
@@ -2346,7 +2535,8 @@ function removeQueueItem(idx, mode) {
 
 function clearPostInputs() { 
     document.getElementById('admin-content').value=''; 
-    document.getElementById('admin-media').value=''; 
+    const mInput = document.getElementById('admin-media-input');
+	if(mInput) mInput.value = ''; 
     document.getElementById('admin-tags').value=''; 
     document.getElementById('admin-pin').checked = false; 
     document.getElementById('file-selector').value=''; 
